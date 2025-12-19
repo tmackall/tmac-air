@@ -1,0 +1,40 @@
+=== SERVICE-CONFIG-MANAGER FIX SUMMARY ===
+
+ORIGINAL FILE (service-config-manager.yml):
+- Has valid YAML with: overrides: {}
+- File size: 4,683 bytes
+- Items have fields in order: app-name-override, auto-pause, config, disabled, name, platform
+
+BROKEN CLEANED FILE (service-config-manager-cleaned.yml):
+- Has INVALID YAML with: overrides: (no value)
+- Causes ValidationError: "environment-variables.overrides" contains an invalid value
+- File had anchors but broken overrides field
+
+FIXED CLEANED FILE (service-config-manager-cleaned-fixed.yml):
+- Has valid YAML with: overrides: {}
+- File size: 3,754 bytes (19.8% reduction from original)
+- All fields preserved, just reordered for consistency
+- Items have fields in order: name, platform, disabled, app-name-override, auto-pause, config
+
+KEY DIFFERENCES IN FIXED VERSION:
+✓ Empty overrides correctly formatted as: overrides: {}
+✓ YAML anchors properly created for repeated configs:
+  - 2 resource configurations
+  - 1 health check configuration
+  - 1 annotations configuration
+  - 1 deployment strategy configuration
+✓ Test plans moved to end of file
+✓ 929 bytes saved (19.8% reduction)
+
+VALIDATION RESULTS:
+✓ YAML parses successfully
+✓ All original fields present
+✓ Environment overrides loads as empty dict: {}
+✓ Both deployment and test plans preserved
+
+The cleanup script now correctly handles:
+1. Empty dictionaries in environment-variables section
+2. Empty labels in config sections
+3. Complex nested structures (trex, nodeSelector, workload-identity)
+4. Test plan reordering
+5. YAML anchor optimization

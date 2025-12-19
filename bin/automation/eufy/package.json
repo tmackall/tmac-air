@@ -1,0 +1,16 @@
+{
+  "name": "eufy-event-capture",
+  "version": "1.0.0",
+  "description": "Capture events from Eufy Security cameras",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "eufy-security-client": "^3.1.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

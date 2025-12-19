@@ -1,0 +1,140 @@
+[0;34m==========================================
+GitHub Repository Search
+==========================================
+Organization: UKGEPIC
+Branch: main
+Repo Pattern: (all)
+Search: publish-docker-image-to-gcr
+==========================================[0m
+
+[0;36mUsing GitHub Code Search (fast mode)...[0m
+
+[1;33mNote: GitHub Code Search limit capped at 1000 (requested: 5000)[0m
+Searching...
+Found [0;32m58[0m matches
+
+[0;36mDownload directory: /tmp[0m
+
+[0;32mquark-forge-templates[0m: [0;36mtemplates/app/tasks/publish-docker-image-to-gcr.yml[0m
+  [0;36mDownloaded: /tmp/quark-forge-templates__publish-docker-image-to-gcr.yml[0m
+[0;32mquark-docs[0m: [0;36mdocs/foundry/explanations/build-steps/configurable-build-steps/publish-docker-image-to-gcr/index.md[0m
+  [0;36mDownloaded: /tmp/quark-docs__index.md[0m
+[0;32mds-pipeline-deib-analytics[0m: [0;36mquark-foundry-options.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-deib-analytics__quark-foundry-options.yml[0m
+[0;32mgsrd-gsam-cloud-automation-v2[0m: [0;36mquark-foundry-options.yml[0m
+  [0;36mDownloaded: /tmp/gsrd-gsam-cloud-automation-v2__quark-foundry-options.yml[0m
+[0;32mquark-forge-templates[0m: [0;36mtemplates/app-gh/steps/publish-docker-image-to-gcr.yml[0m
+  [0;36mDownloaded: /tmp/quark-forge-templates__publish-docker-image-to-gcr.yml[0m
+[0;32mcxots-rapid-pipeline-doc-processing-model[0m: [0;36mgithub_staging/workflows/technical-solutions-pipeline-doc-processing-model-main-workflow.yml[0m
+  [0;36mDownloaded: /tmp/cxots-rapid-pipeline-doc-processing-model__technical-solutions-pipeline-doc-processing-model-main-workflow.yml[0m
+[0;32mds-pipeline-ner-data-provisioning[0m: [0;36mquark-foundry-options.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-ner-data-provisioning__quark-foundry-options.yml[0m
+[0;32mcxots-rapid-pipeline-doc-processing-model[0m: [0;36mgithub_staging/workflows/technical-solutions-pipeline-doc-processing-model-develop-workflow.yml[0m
+  [0;36mDownloaded: /tmp/cxots-rapid-pipeline-doc-processing-model__technical-solutions-pipeline-doc-processing-model-develop-workflow.yml[0m
+[0;32mds-pipeline-genai-analytics[0m: [0;36mquark-foundry-options.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-genai-analytics__quark-foundry-options.yml[0m
+[0;32mquark-forge-templates[0m: [0;36mtemplates/app-gh/pipeline.yml[0m
+  [0;36mDownloaded: /tmp/quark-forge-templates__pipeline.yml[0m
+[0;32mds-pipeline-candidate-matchv2[0m: [0;36mquark-foundry-options.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-candidate-matchv2__quark-foundry-options.yml[0m
+[0;32mquark-docs[0m: [0;36mmkdocs.yml[0m
+  [0;36mDownloaded: /tmp/quark-docs__mkdocs.yml[0m
+[0;32mquark-forge-templates[0m: [0;36mtemplates/docker-image-gh/jobs/build.yml[0m
+  [0;36mDownloaded: /tmp/quark-forge-templates__build.yml[0m
+[0;32mcompmgntpdf[0m: [0;36mquark-foundry-options.yml[0m
+  [0;36mDownloaded: /tmp/compmgntpdf__quark-foundry-options.yml[0m
+[0;32mquark-forge-templates[0m: [0;36mtemplates/app/pipeline.yml[0m
+  [0;36mDownloaded: /tmp/quark-forge-templates__pipeline.yml[0m
+[0;32mds-pipeline-conversational-framework-analytics[0m: [0;36mquark-foundry-options.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-conversational-framework-analytics__quark-foundry-options.yml[0m
+[0;32mds-flow-docprocessing-mysql[0m: [0;36mquark-foundry-options.yml[0m
+  [0;36mDownloaded: /tmp/ds-flow-docprocessing-mysql__quark-foundry-options.yml[0m
+[0;32mds-pipeline-agents-evaluation[0m: [0;36m.github/workflows/ds-pipeline-agents-evaluation-main-workflow.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-agents-evaluation__ds-pipeline-agents-evaluation-main-workflow.yml[0m
+[0;32mgsrd-gsam-cloud-automation-v2[0m: [0;36m.github/workflows/gsrd-gsam-cloud-automation-v2-master-workflow.yml[0m
+  [0;36mDownloaded: /tmp/gsrd-gsam-cloud-automation-v2__gsrd-gsam-cloud-automation-v2-master-workflow.yml[0m
+[0;32mds-pipeline-ner-data-provisioning[0m: [0;36m.github/workflows/ds-pipeline-ner-data-provisioning-develop-workflow.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-ner-data-provisioning__ds-pipeline-ner-data-provisioning-develop-workflow.yml[0m
+[0;32mds-pipeline-doc-processing-model[0m: [0;36m.github/workflows/ds-pipeline-doc-processing-model-main-workflow.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-doc-processing-model__ds-pipeline-doc-processing-model-main-workflow.yml[0m
+[0;32mds-pipeline-model-performance-monitoring[0m: [0;36mquark-foundry-options.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-model-performance-monitoring__quark-foundry-options.yml[0m
+[0;32mrotate-wfd-key[0m: [0;36m.github/workflows/rotate-wfd-token-ci-workflow.yml[0m
+  [0;36mDownloaded: /tmp/rotate-wfd-key__rotate-wfd-token-ci-workflow.yml[0m
+[0;32mrotate-wfd-key[0m: [0;36m.github/workflows/rotate-wfd-token-develop-workflow.yml[0m
+  [0;36mDownloaded: /tmp/rotate-wfd-key__rotate-wfd-token-develop-workflow.yml[0m
+[0;32mds-pipeline-agents-evaluation[0m: [0;36m.github/workflows/ds-pipeline-agents-evaluation-develop-workflow.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-agents-evaluation__ds-pipeline-agents-evaluation-develop-workflow.yml[0m
+[0;32mds-pipeline-dataflow-user-feedback-etl[0m: [0;36mquark-foundry-options.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-dataflow-user-feedback-etl__quark-foundry-options.yml[0m
+[0;32mcip-atom-cloud-serviceability-tasks[0m: [0;36mquark-foundry-options.yml[0m
+  [0;36mDownloaded: /tmp/cip-atom-cloud-serviceability-tasks__quark-foundry-options.yml[0m
+[0;32mds-pipeline-doc-processing-model[0m: [0;36mquark-foundry-options.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-doc-processing-model__quark-foundry-options.yml[0m
+[0;32mrotate-wfd-key[0m: [0;36mquark-foundry-options.yml[0m
+  [0;36mDownloaded: /tmp/rotate-wfd-key__quark-foundry-options.yml[0m
+[0;32mquark-forge-templates[0m: [0;36mtemplates/docker-image-gh/pipeline.yml[0m
+  [0;36mDownloaded: /tmp/quark-forge-templates__pipeline.yml[0m
+[0;32mds-pipeline-deib-analytics[0m: [0;36m.github/workflows/ds-pipeline-deib-analytics-main-workflow.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-deib-analytics__ds-pipeline-deib-analytics-main-workflow.yml[0m
+[0;32mds-flow-docprocessing-mysql[0m: [0;36m.github/workflows/ds-flow-docprocessing-mysql-main-workflow.yml[0m
+  [0;36mDownloaded: /tmp/ds-flow-docprocessing-mysql__ds-flow-docprocessing-mysql-main-workflow.yml[0m
+[0;32mds-deib-leadership-recommendation[0m: [0;36m.github/workflows/ds-deib-leadership-recommendation-main-workflow.yml[0m
+  [0;36mDownloaded: /tmp/ds-deib-leadership-recommendation__ds-deib-leadership-recommendation-main-workflow.yml[0m
+[0;32mds-deib-leadership-recommendation[0m: [0;36m.github/workflows/ds-deib-leadership-recommendation-develop-workflow.yml[0m
+  [0;36mDownloaded: /tmp/ds-deib-leadership-recommendation__ds-deib-leadership-recommendation-develop-workflow.yml[0m
+[0;32mds-pipeline-candidate-matchv2[0m: [0;36m.github/workflows/ds-pipeline-candidate-matchv2-main-workflow.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-candidate-matchv2__ds-pipeline-candidate-matchv2-main-workflow.yml[0m
+[0;32mds-pipeline-candidate-matchv2[0m: [0;36m.github/workflows/ds-pipeline-candidate-matchv2-develop-workflow.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-candidate-matchv2__ds-pipeline-candidate-matchv2-develop-workflow.yml[0m
+[0;32mds-pipeline-conversational-framework-analytics[0m: [0;36m.github/workflows/ds-pipeline-conversational-framework-analytics-main-workflow.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-conversational-framework-analytics__ds-pipeline-conversational-framework-analytics-main-workflow.yml[0m
+[0;32mds-pipeline-genai-analytics[0m: [0;36m.github/workflows/ds-pipeline-genai-analytics-main-workflow.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-genai-analytics__ds-pipeline-genai-analytics-main-workflow.yml[0m
+[0;32mds-pipeline-teampulse-analytics[0m: [0;36m.github/workflows/ds-pipeline-teampulse-analytics-main-workflow.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-teampulse-analytics__ds-pipeline-teampulse-analytics-main-workflow.yml[0m
+[0;32mds-pipeline-dataflow-observability[0m: [0;36mquark-foundry-options.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-dataflow-observability__quark-foundry-options.yml[0m
+[0;32mquark-forge-templates[0m: [0;36mtemplates/shared-tasks/publish-docker-image-to-gcr.yml[0m
+  [0;36mDownloaded: /tmp/quark-forge-templates__publish-docker-image-to-gcr.yml[0m
+[0;32mds-pipeline-dataflow-skills-model[0m: [0;36mquark-foundry-options.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-dataflow-skills-model__quark-foundry-options.yml[0m
+[0;32mds-pipeline-agents-evaluation[0m: [0;36mquark-foundry-options.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-agents-evaluation__quark-foundry-options.yml[0m
+[0;32mds-pipeline-teampulse-analytics[0m: [0;36mquark-foundry-options.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-teampulse-analytics__quark-foundry-options.yml[0m
+[0;32mds-flow-docprocessing-mysql[0m: [0;36m.github/workflows/ds-flow-docprocessing-mysql-develop-workflow.yml[0m
+  [0;36mDownloaded: /tmp/ds-flow-docprocessing-mysql__ds-flow-docprocessing-mysql-develop-workflow.yml[0m
+[0;32mquark-docker-base[0m: [0;36mquark-foundry-options.yml[0m
+  [0;36mDownloaded: /tmp/quark-docker-base__quark-foundry-options.yml[0m
+[0;32mgsrd-gsam-cloud-automation-v2[0m: [0;36m.github/workflows/gsrd-gsam-cloud-automation-v2-ci-workflow.yml[0m
+  [0;36mDownloaded: /tmp/gsrd-gsam-cloud-automation-v2__gsrd-gsam-cloud-automation-v2-ci-workflow.yml[0m
+[0;32mquality-growth-presales-e2e-smoke[0m: [0;36mnightwatch/quark-foundry-options.yml[0m
+  [0;36mDownloaded: /tmp/quality-growth-presales-e2e-smoke__quark-foundry-options.yml[0m
+[0;32mcip-atom-cloud-serviceability-tasks[0m: [0;36m.github/workflows/cip-atom-cloud-serviceability-tasks-main-workflow.yml[0m
+  [0;36mDownloaded: /tmp/cip-atom-cloud-serviceability-tasks__cip-atom-cloud-serviceability-tasks-main-workflow.yml[0m
+[0;32mquark-forge-templates[0m: [0;36mtemplates/app/jobs/build.yml[0m
+  [0;36mDownloaded: /tmp/quark-forge-templates__build.yml[0m
+[0;32mds-pipeline-dataflow-lightcast-skills-model[0m: [0;36mquark-foundry-options.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-dataflow-lightcast-skills-model__quark-foundry-options.yml[0m
+[0;32mds-pipeline-doc-processing-model[0m: [0;36m.github/workflows/ds-pipeline-doc-processing-model-develop-workflow.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-doc-processing-model__ds-pipeline-doc-processing-model-develop-workflow.yml[0m
+[0;32mds-pipeline-teampulse-analytics[0m: [0;36m.github/workflows/ds-pipeline-teampulse-analytics-develop-workflow.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-teampulse-analytics__ds-pipeline-teampulse-analytics-develop-workflow.yml[0m
+[0;32mquark-forge-templates[0m: [0;36mtemplates/app-gh/jobs/build.yml[0m
+  [0;36mDownloaded: /tmp/quark-forge-templates__build.yml[0m
+[0;32mcompmgntpoc[0m: [0;36mquark-foundry-options.yml[0m
+  [0;36mDownloaded: /tmp/compmgntpoc__quark-foundry-options.yml[0m
+[0;32mds-pipeline-ner-data-provisioning[0m: [0;36m.github/workflows/ds-pipeline-ner-data-provisioning-main-workflow.yml[0m
+  [0;36mDownloaded: /tmp/ds-pipeline-ner-data-provisioning__ds-pipeline-ner-data-provisioning-main-workflow.yml[0m
+[0;32mquark-forge-templates[0m: [0;36mtemplates/docker-image-gh/steps/publish-docker-image-to-gcr.yml[0m
+  [0;36mDownloaded: /tmp/quark-forge-templates__publish-docker-image-to-gcr.yml[0m
+[0;32mcxots-rapid-pipeline-doc-processing-model[0m: [0;36mquark-foundry-options.yml[0m
+  [0;36mDownloaded: /tmp/cxots-rapid-pipeline-doc-processing-model__quark-foundry-options.yml[0m
+
+[0;34m==========================================
+Search Complete (Code Search)
+==========================================
+Repos with matches: 25
+Files matched: 58
+==========================================[0m
