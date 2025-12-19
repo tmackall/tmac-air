@@ -1,0 +1,40 @@
+#!/bin/bash
+
+XFER_DIR="xfer-work"
+
+scpToMackall() {
+    if [ $# -eq 0 ]; then
+        echo "Error: No files specified"
+        echo "Usage: scp_to_both <file(s)>"
+        return 1
+    fi
+    
+    # Check if niwot drive is available
+    if ! ssh niwot "mountpoint -q /mnt/usb-ext-hd1 2>/dev/null || [ -d /mnt/usb-ext-hd1 ]"; then
+        echo "Warning: niwot drive may not be mounted"
+        read -p "Continue anyway? (y/n) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            return 1
+        fi
+    fi
+    # Check if homey drive is available
+    if ! ssh homey "mountpoint -q /mnt/usb-ssd/${XFER_DIR} 2>/dev/null || [ -d /mnt/usb-ssd/${XFER_DIR} ]"; then
+        echo "Warning: homey drive may not be mounted"
+        read -p "Continue anyway? (y/n) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            return 1
+        fi
+    fi
+    
+    local files=("$@")
+    
+    echo "Copying to niwot..."
+    scp "${files[@]}" niwot:/mnt/usb-ext-hd1/${XFER_DIR} || echo "Failed to copy to niwot"
+    
+    echo "Copying to homey..."
+    scp "${files[@]}" homey:/mnt/usb-ssd/${XFER_DIR}/ || echo "Failed to copy to homey"
+    
+    echo "Done!"
+}

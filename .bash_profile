@@ -1,0 +1,1 @@
+/Users/tmackall/dotfiles/bash_profile

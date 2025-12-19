@@ -1,0 +1,20 @@
+
+
+#
+# copy files to bexley and niwot /mnt drives
+#
+scph() {
+  if [[ $# -lt 1 ]]; then
+    echo -e "\nUsage: scph <list of files>\n"
+    exit 1
+  fi
+  for i in $@; do
+    cmd="scp $i niwot:/mnt/usb-ext-hd1/xfer/"
+    echo "$cmd"
+    eval "$cmd"
+    cmd="scp $i bexley:/mnt/usb-ext-hd1/xfer/"
+    echo "$cmd"
+    eval "$cmd"
+  done
+  return 0 
+}

@@ -1,0 +1,193 @@
+" ~/.vimrc - Modern Vim Configuration
+
+"==================
+" General Settings
+"==================
+set nocompatible              " Use Vim defaults, not Vi
+set encoding=utf-8            " UTF-8 encoding
+set fileencoding=utf-8
+set history=1000              " Command history
+set undolevels=1000           " Undo history
+set autoread                  " Reload files changed outside vim
+set hidden                    " Allow switching buffers without saving
+set backspace=indent,eol,start " Backspace works as expected
+set clipboard=unnamed         " Use system clipboard (macOS)
+set mouse=a                   " Enable mouse support
+set ttimeoutlen=10            " Faster escape key response
+
+"==================
+" UI / Display
+"==================
+syntax enable                 " Syntax highlighting
+set number                    " Show line numbers
+"set relativenumber            " Relative line numbers
+set cursorline                " Highlight current line
+set showmatch                 " Highlight matching brackets
+set showcmd                   " Show command in bottom bar
+set showmode                  " Show current mode
+set wildmenu                  " Visual autocomplete for command menu
+set wildmode=longest:full,full
+set laststatus=2              " Always show status line
+set ruler                     " Show cursor position
+set scrolloff=8               " Keep 8 lines above/below cursor
+set sidescrolloff=8           " Keep 8 columns left/right of cursor
+set signcolumn=yes            " Always show sign column
+set colorcolumn=100           " Show column marker at 100 chars
+set title                     " Set terminal title
+set visualbell                " No beeping
+set noerrorbells              " No error bells
+
+"==================
+" Colors
+"==================
+set background=dark
+set termguicolors             " True color support
+
+" Try to use a nice colorscheme if available
+try
+    colorscheme desert
+catch
+endtry
+
+"==================
+" Indentation
+"==================
+set autoindent                " Copy indent from current line
+set smartindent               " Smart autoindenting
+set expandtab                 " Use spaces instead of tabs
+set tabstop=4                 " Tab = 4 spaces
+set shiftwidth=4              " Indent = 4 spaces
+set softtabstop=4             " Backspace removes 4 spaces
+set shiftround                " Round indent to multiple of shiftwidth
+filetype plugin indent on     " Filetype-specific indentation
+
+" Language-specific indentation
+autocmd FileType javascript,json,yaml,html,css setlocal tabstop=2 shiftwidth=2 softtabstop=2
+autocmd FileType python setlocal tabstop=4 shiftwidth=4 softtabstop=4
+autocmd FileType make setlocal noexpandtab
+
+"==================
+" Search
+"==================
+set incsearch                 " Search as you type
+set hlsearch                  " Highlight search results
+set ignorecase                " Case insensitive search
+set smartcase                 " Unless uppercase is used
+
+"==================
+" Files / Backup
+"==================
+set nobackup                  " No backup files
+set nowritebackup
+set noswapfile                " No swap files
+set undofile                  " Persistent undo
+set undodir=~/.vim/undodir    " Undo file location
+
+" Create undo directory if it doesn't exist
+if !isdirectory($HOME . "/.vim/undodir")
+    call mkdir($HOME . "/.vim/undodir", "p")
+endif
+
+"==================
+" Key Mappings
+"==================
+" Set leader key to space
+let mapleader = " "
+
+" Quick save
+nnoremap <leader>w :w<CR>
+
+" Quick quit
+nnoremap <leader>q :q<CR>
+
+" Clear search highlighting
+nnoremap <leader><space> :nohlsearch<CR>
+
+" Better window navigation
+nnoremap <C-h> <C-w>h
+nnoremap <C-j> <C-w>j
+nnoremap <C-k> <C-w>k
+nnoremap <C-l> <C-w>l
+
+" Move lines up/down
+nnoremap <A-j> :m .+1<CR>==
+nnoremap <A-k> :m .-2<CR>==
+vnoremap <A-j> :m '>+1<CR>gv=gv
+vnoremap <A-k> :m '<-2<CR>gv=gv
+
+" Stay in visual mode when indenting
+vnoremap < <gv
+vnoremap > >gv
+
+" Buffer navigation
+nnoremap <leader>bn :bnext<CR>
+nnoremap <leader>bp :bprevious<CR>
+nnoremap <leader>bd :bdelete<CR>
+nnoremap <leader>bl :ls<CR>
+
+" Tab navigation
+nnoremap <leader>tn :tabnew<CR>
+nnoremap <leader>tc :tabclose<CR>
+nnoremap <Tab> :tabnext<CR>
+nnoremap <S-Tab> :tabprevious<CR>
+
+" Quick edit vimrc
+nnoremap <leader>ev :e $MYVIMRC<CR>
+nnoremap <leader>sv :source $MYVIMRC<CR>
+
+" Toggle line numbers
+nnoremap <leader>ln :set relativenumber!<CR>
+
+" Y yanks to end of line (consistent with C and D)
+nnoremap Y y$
+
+" Keep cursor centered when jumping
+nnoremap n nzzzv
+nnoremap N Nzzzv
+nnoremap <C-d> <C-d>zz
+nnoremap <C-u> <C-u>zz
+
+" Quick access to common files
+nnoremap <leader>eb :e ~/.bashrc<CR>
+nnoremap <leader>es :e ~/.ssh/config<CR>
+
+"==================
+" Status Line
+"==================
+set statusline=
+set statusline+=%#PmenuSel#
+set statusline+=\ %M                      " Modified flag
+set statusline+=\ %f                      " Filename
+set statusline+=%=                        " Right align
+set statusline+=\ %y                      " Filetype
+set statusline+=\ %{&fileencoding?&fileencoding:&encoding}
+set statusline+=\ [%{&fileformat}]
+set statusline+=\ %l:%c                   " Line:Column
+set statusline+=\ %p%%                    " Percentage through file
+set statusline+=\
+
+"==================
+" Auto Commands
+"==================
+" Remove trailing whitespace on save
+autocmd BufWritePre * :%s/\s\+$//e
+
+" Return to last edit position when opening files
+autocmd BufReadPost *
+    \ if line("'\"") > 0 && line("'\"") <= line("$") |
+    \   exe "normal! g`\"" |
+    \ endif
+
+" Auto-resize splits when vim is resized
+autocmd VimResized * wincmd =
+
+"==================
+" netrw (built-in file explorer)
+"==================
+let g:netrw_banner = 0        " Hide banner
+let g:netrw_liststyle = 3     " Tree view
+let g:netrw_browse_split = 4  " Open in previous window
+let g:netrw_winsize = 25      " 25% width
+
+" Toggle netrw
+nnoremap <leader>e :Lexplore<CR>

@@ -1,0 +1,49 @@
+#!/bin/bash
+ENC="-aes-256-cbc -md sha512 -pbkdf2 -iter 1000000 -salt"
+#ENC="-aes-256-cbc -nosalt"
+mk_copy() {
+  file="$1"
+  if [  -f $file ]; then
+    tmp=$(mktemp /tmp/$file-XXXX)
+    cmd="cp $file $tmp"
+    echo -e "\n$cmd\n"
+    eval "$cmd"
+  fi
+}
+
+f_enc() {
+  if [[ $# -ne 1 ]]; then
+    echo -e "\nUsage f_enc <filename>\n"
+    return 1
+  fi
+  file_enc="$1"
+  mk_copy "$file_enc"
+  PASSWD=""
+  if [[ -n "${FENC_PASSWORD}" ]]; then
+    PASSWD="-pass pass:${FENC_PASSWORD}"
+  fi
+  out_file="${file_enc}.enc"
+  cmd="openssl enc ${ENC} ${PASSWD} < ${file_enc} > ${out_file}"
+  echo -e "$cmd"
+  eval "$cmd"
+  echo "created: $out_file"
+}
+# file decryption
+f_dec() {
+  if [[ $# -ne 1 ]]; then
+    echo -e "\nUsage f_dec <filename>\n"
+    return 1
+  fi
+  file_dec="$1"
+  mk_copy "$file_dec"
+  PASSWD=""
+  if [[ -n "${FENC_PASSWORD}" ]]; then
+    PASSWD="-pass pass:${FENC_PASSWORD}"
+  fi
+  bn=$(basename "$file_dec")
+  out_file=${bn%.*}
+  cmd="openssl enc ${ENC} -d ${PASSWD} < ${file_dec} > ${out_file}"
+  echo -e "$cmd"
+  eval "$cmd"
+  echo "created: $out_file"
+}

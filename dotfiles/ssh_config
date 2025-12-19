@@ -1,0 +1,36 @@
+# ~/.ssh/config - SSH client configuration
+
+# Global defaults
+Host *
+    AddKeysToAgent yes
+    UseKeychain yes
+    IdentityFile ~/.ssh/id_ed25519
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+
+# Local network hosts - update IPs as needed
+Host pi
+    HostName 192.168.1.50
+    User pi
+
+Host homey
+    HostName 192.168.86.150
+    User tmackall
+
+Host niwot-l
+    HostName 192.168.86.249
+    User tmackall
+
+Host niwot
+    HostName lacey.malamack.us
+    User tmackall
+
+Host nas
+    HostName 192.168.1.200
+    User admin
+
+# GitHub
+Host github.com
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/id_ed25519
