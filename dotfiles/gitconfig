@@ -13,6 +13,22 @@
 [color]
 	ui = auto
 
+[color "status"]
+	added = yellow bold
+	changed = green bold
+	untracked = white bold
+
+[color "branch"]
+	current = yellow reverse
+	local = yellow bold
+	remote = green bold
+
+[color "diff"]
+	meta = yellow bold
+	frag = magenta bold
+	old = red reverse
+	new = green bold
+
 [diff]
 	colorMoved = default
 	algorithm = histogram
