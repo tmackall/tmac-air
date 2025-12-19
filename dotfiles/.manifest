@@ -1,0 +1,14 @@
+# Dotfiles Manifest
+# Format: source_name:target_path
+# Example: bashrc:~/.bashrc
+bash_profile:/Users/tmackall/.bash_profile
+bashrc:/Users/tmackall/.bashrc
+fenc:/Users/tmackall/.fenc
+gitconfig:/Users/tmackall/.gitconfig
+homerc:/Users/tmackall/.homerc
+install.sh:/Users/tmackall/.install.sh
+npmrc:/Users/tmackall/.npmrc
+README.md:/Users/tmackall/.README.md
+scprc:/Users/tmackall/.scprc
+ssh_config:/Users/tmackall/.ssh_config
+vimrc:/Users/tmackall/.vimrc

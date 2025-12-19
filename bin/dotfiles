@@ -22,6 +22,8 @@ Commands:
     init            Initialize the dotfiles directory
     add <file>      Add an existing dotfile to management (moves & symlinks)
     remove <name>   Stop managing a file (restores to original location)
+    import <n>   Register a file already in dotfiles dir (+ create symlink)
+    import --all    Import all untracked files in dotfiles dir
     link            Create symlinks for all managed dotfiles
     unlink          Remove all symlinks (keeps source files)
     status          Show status of all managed dotfiles
@@ -35,6 +37,8 @@ Examples:
     $(basename "$0") init                    # Create ~/dotfiles directory
     $(basename "$0") add ~/.bashrc           # Start managing .bashrc
     $(basename "$0") add ~/.config/nvim      # Works with directories too
+    $(basename "$0") import bashrc           # Register existing file in dotfiles dir
+    $(basename "$0") import --all            # Import all untracked files
     $(basename "$0") remove bashrc           # Stop managing, restore to ~/.bashrc
     $(basename "$0") link                    # Create all symlinks
     $(basename "$0") status                  # Check what's linked
@@ -49,22 +53,134 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # Initialize dotfiles directory
 cmd_init() {
-    if [[ -d "$DOTFILES_DIR" ]]; then
-        log_warn "Dotfiles directory already exists: $DOTFILES_DIR"
-        return 0
+    local created_dir=0
+    
+    if [[ ! -d "$DOTFILES_DIR" ]]; then
+        mkdir -p "$DOTFILES_DIR"
+        created_dir=1
     fi
     
-    mkdir -p "$DOTFILES_DIR"
-    
-    # Create a manifest file to track original locations
-    cat > "$DOTFILES_DIR/.manifest" << 'MANIFEST'
+    # Create manifest if it doesn't exist
+    if [[ ! -f "$DOTFILES_DIR/.manifest" ]]; then
+        cat > "$DOTFILES_DIR/.manifest" << 'MANIFEST'
 # Dotfiles Manifest
 # Format: source_name:target_path
 # Example: bashrc:~/.bashrc
 MANIFEST
+        log_success "Created manifest in: $DOTFILES_DIR"
+    else
+        log_info "Manifest already exists: $DOTFILES_DIR/.manifest"
+    fi
     
-    log_success "Initialized dotfiles directory: $DOTFILES_DIR"
+    if [[ $created_dir -eq 1 ]]; then
+        log_success "Initialized dotfiles directory: $DOTFILES_DIR"
+    else
+        log_info "Using existing directory: $DOTFILES_DIR"
+    fi
+    
     log_info "Add files with: $(basename "$0") add <dotfile>"
+}
+
+# Import existing files from dotfiles directory into manifest
+cmd_import() {
+    local name="$1"
+    local target="$2"
+    
+    if [[ ! -f "$DOTFILES_DIR/.manifest" ]]; then
+        log_error "No manifest found. Run 'init' first."
+        return 1
+    fi
+    
+    # Import all untracked files if --all flag
+    if [[ "$name" == "--all" ]]; then
+        local count=0
+        for file in "$DOTFILES_DIR"/*; do
+            [[ -e "$file" ]] || continue
+            local basename=$(basename "$file")
+            [[ "$basename" == .* ]] && continue  # Skip hidden files
+            
+            # Check if already in manifest
+            if grep -q "^${basename}:" "$DOTFILES_DIR/.manifest" 2>/dev/null; then
+                log_info "Already tracked: $basename"
+                continue
+            fi
+            
+            # Infer target path
+            local inferred_target="$HOME/.$basename"
+            echo "$basename:$inferred_target" >> "$DOTFILES_DIR/.manifest"
+            log_success "Imported: $basename -> $inferred_target"
+            
+            # Create symlink if target doesn't exist
+            if [[ ! -e "$inferred_target" ]]; then
+                ln -s "$file" "$inferred_target"
+                log_success "Linked: $inferred_target -> $file"
+            elif [[ -L "$inferred_target" ]]; then
+                log_info "Symlink already exists: $inferred_target"
+            else
+                log_warn "Target exists (not a symlink): $inferred_target"
+            fi
+            
+            ((count++))
+        done
+        log_info "Imported $count file(s)"
+        return 0
+    fi
+    
+    if [[ -z "$name" ]]; then
+        log_error "Usage: $(basename "$0") import <name> [target]"
+        log_info "       $(basename "$0") import --all"
+        log_info ""
+        log_info "Examples:"
+        log_info "  import bashrc              # Imports as ~/.bashrc"
+        log_info "  import nvim ~/.config/nvim # Imports with custom target"
+        log_info "  import --all               # Import all untracked files"
+        return 1
+    fi
+    
+    local storage_path="$DOTFILES_DIR/$name"
+    
+    if [[ ! -e "$storage_path" ]]; then
+        log_error "File not found in dotfiles: $storage_path"
+        log_info "Available files:"
+        cmd_list
+        return 1
+    fi
+    
+    # Check if already in manifest
+    if grep -q "^${name}:" "$DOTFILES_DIR/.manifest" 2>/dev/null; then
+        log_error "Already tracked: $name"
+        return 1
+    fi
+    
+    # Infer target if not provided
+    if [[ -z "$target" ]]; then
+        # Handle config/ subdirectory specially
+        if [[ "$name" == config/* ]]; then
+            target="$HOME/.${name}"
+        else
+            target="$HOME/.$name"
+        fi
+    fi
+    
+    # Add to manifest
+    echo "$name:$target" >> "$DOTFILES_DIR/.manifest"
+    log_success "Imported: $name -> $target"
+    
+    # Offer to create symlink
+    if [[ ! -e "$target" ]]; then
+        ln -s "$storage_path" "$target"
+        log_success "Linked: $target -> $storage_path"
+    elif [[ -L "$target" ]]; then
+        local current=$(readlink "$target")
+        if [[ "$current" == "$storage_path" ]]; then
+            log_info "Already linked correctly"
+        else
+            log_warn "Symlink exists but points to: $current"
+        fi
+    else
+        log_warn "Target exists (not a symlink): $target"
+        log_info "Remove it manually, then run 'link' to create symlink"
+    fi
 }
 
 # Get the non-dot name for storage
@@ -342,7 +458,7 @@ while [[ $# -gt 0 ]]; do
             usage
             exit 0
             ;;
-        init|add|remove|link|unlink|status|list)
+        init|add|import|remove|link|unlink|status|list)
             COMMAND="$1"
             shift
             break
@@ -359,6 +475,7 @@ done
 case "${COMMAND:-}" in
     init)   cmd_init ;;
     add)    cmd_add "$1" ;;
+    import) cmd_import "$1" "$2" ;;
     remove) cmd_remove "$1" ;;
     link)   cmd_link ;;
     unlink) cmd_unlink ;;
