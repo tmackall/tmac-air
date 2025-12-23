@@ -98,14 +98,33 @@ if has_glob "$TARGET"; then
     
     FULL_PATH="${REMOTE}:${DIR_PATH}"
     
-    # Show what will be deleted (search recursively to find files in subdirs)
-    echo "Matching files:"
-    rclone ls "$FULL_PATH" --include "$PATTERN" --include "**/$PATTERN" --recursive 2>/dev/null
+    # Build include patterns using array for proper quoting:
+    # - Match files directly: "2013*"
+    # - Match files in matching directories: "2013*/**"
+    # - Match files in subdirs: "**/2013*" and "**/2013*/**"
+    INCLUDE_ARGS=(
+        --include "$PATTERN"
+        --include "$PATTERN/**"
+        --include "**/$PATTERN"
+        --include "**/$PATTERN/**"
+    )
     
-    MATCH_COUNT=$(rclone ls "$FULL_PATH" --include "$PATTERN" --include "**/$PATTERN" --recursive 2>/dev/null | wc -l)
+    # Debug: show exact command
+    if [[ -n "$VERBOSE" ]]; then
+        echo "DEBUG: rclone ls \"$FULL_PATH\" ${INCLUDE_ARGS[*]}"
+    fi
+    
+    # Show what will be deleted
+    echo "Matching files:"
+    rclone ls "$FULL_PATH" "${INCLUDE_ARGS[@]}" 2>/dev/null
+    
+    MATCH_COUNT=$(rclone ls "$FULL_PATH" "${INCLUDE_ARGS[@]}" 2>/dev/null | wc -l)
     
     if [[ $MATCH_COUNT -eq 0 ]]; then
-        echo "No files matching '$PATTERN' in '$DIR_PATH'"
+        echo "No files matching '$PATTERN' in '${DIR_PATH:-/}'"
+        echo ""
+        echo "Hint: Try running manually:"
+        echo "  rclone ls \"$FULL_PATH\" --include \"$PATTERN/**\""
         exit 0
     fi
     
@@ -118,7 +137,7 @@ if has_glob "$TARGET"; then
         fi
     fi
     
-    rclone delete $DRY_RUN $VERBOSE "$FULL_PATH" --include "$PATTERN" --include "**/$PATTERN" --recursive
+    rclone delete $DRY_RUN $VERBOSE "$FULL_PATH" "${INCLUDE_ARGS[@]}"
 else
     # No glob - original behavior
     FULL_PATH="${REMOTE}:${TARGET}"

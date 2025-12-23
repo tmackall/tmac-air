@@ -77,16 +77,16 @@ has_glob() {
 }
 
 # Build base command
+# Note: rclone ls/lsl are recursive by default; lsd is not
 if $DIRS_ONLY; then
     CMD="rclone lsd"
+    if $RECURSIVE; then
+        CMD="$CMD --recursive"
+    fi
 elif $LONG; then
     CMD="rclone lsl"
 else
     CMD="rclone ls"
-fi
-
-if $RECURSIVE; then
-    CMD="$CMD --recursive"
 fi
 
 # Handle glob patterns
@@ -99,8 +99,18 @@ if has_glob "$PATH_ARG"; then
         DIR_PATH=""
     fi
     
-    # Always search recursively with globs to find files in subdirectories
-    $CMD "${REMOTE}:${DIR_PATH}" --include "$PATTERN" --include "**/$PATTERN" --recursive
+    # Build include patterns using array for proper quoting:
+    # - Match files directly: "pattern"
+    # - Match files in matching directories: "pattern/**"
+    # - Match files in subdirs: "**/pattern" and "**/pattern/**"
+    INCLUDE_ARGS=(
+        --include "$PATTERN"
+        --include "$PATTERN/**"
+        --include "**/$PATTERN"
+        --include "**/$PATTERN/**"
+    )
+    
+    $CMD "${REMOTE}:${DIR_PATH}" "${INCLUDE_ARGS[@]}"
 else
     $CMD "${REMOTE}:${PATH_ARG}"
 fi
