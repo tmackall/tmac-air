@@ -101,6 +101,8 @@ EOF
         local ext=""
         if [[ "$new_name" == *.* && ! -d "$file" ]]; then
             ext=".${new_name##*.}"
+            # Strip trailing underscores from extension (from trailing whitespace in original)
+            while [[ "$ext" == *_ ]]; do ext="${ext%_}"; done
             new_name="${new_name%.*}"
         fi
         new_name=$(echo "$new_name" | sed 's/^_*//; s/_*$//')
