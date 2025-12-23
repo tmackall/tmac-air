@@ -6,6 +6,7 @@
 .DS_Store
 .gnupg
 .lesshst
+.npm/
 .ssh
 .Trash
 .vim
@@ -14,6 +15,9 @@
 .zsh_sessions
 /*.pub
 /*.zip
+/bitwarden
+/Desktop/Screen*
+/keyboard
 Documents
 Downloads
 Library

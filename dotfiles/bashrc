@@ -238,8 +238,14 @@ if [ -f ~/.bashrc.local ]; then
 fi
 
 set -o vi
-
+function dates() {
+    date +%s
+}
+export -f dates
 function fenc() {
     fenc.sh "$@"
 }
 export -f fenc
+alias sbrc="source $HOME/.bashrc"
+
+source "$HOME/.backup"
