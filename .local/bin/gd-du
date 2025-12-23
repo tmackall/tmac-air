@@ -1,0 +1,98 @@
+#!/bin/bash
+# gd-du - Show disk usage on Google Drive
+# Usage: gd-du [path]
+
+REMOTE="${GD_REMOTE:-gdrive}"
+
+show_help() {
+    cat << EOF
+Usage: gd-du [path] [options]
+
+Show disk usage for files and folders on Google Drive.
+
+Arguments:
+    path            Path to check (default: root)
+
+Options:
+    -s, --summary   Show only total for path
+    -d, --depth N   Show usage up to N levels deep
+    -h, --help      Show this help message
+
+Environment:
+    GD_REMOTE       rclone remote name (default: gdrive)
+
+Examples:
+    gd-du                           # Total usage
+    gd-du Documents                 # Usage of Documents folder
+    gd-du -d 1                      # Usage by top-level folders
+EOF
+}
+
+# Defaults
+TARGET=""
+SUMMARY=false
+DEPTH=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -s|--summary)
+            SUMMARY=true
+            shift
+            ;;
+        -d|--depth)
+            DEPTH="$2"
+            shift 2
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+        *)
+            TARGET="$1"
+            shift
+            ;;
+    esac
+done
+
+FULL_PATH="${REMOTE}:${TARGET}"
+
+if $SUMMARY || [[ -z "$DEPTH" ]]; then
+    # Simple total
+    echo "Calculating size of: ${TARGET:-/}"
+    rclone size "$FULL_PATH"
+else
+    # Show by depth
+    echo "Usage by folder (depth $DEPTH):"
+    echo ""
+    
+    if [[ "$DEPTH" == "1" ]]; then
+        # List top-level directories with sizes
+        rclone lsd "$FULL_PATH" 2>/dev/null | while read -r line; do
+            dir_name=$(echo "$line" | awk '{print $NF}')
+            size_info=$(rclone size "${FULL_PATH}${dir_name}" --json 2>/dev/null)
+            size_bytes=$(echo "$size_info" | grep -o '"bytes":[0-9]*' | cut -d: -f2)
+            
+            if [[ -n "$size_bytes" ]]; then
+                # Convert to human readable
+                if [[ $size_bytes -gt 1073741824 ]]; then
+                    size_hr=$(echo "scale=2; $size_bytes/1073741824" | bc)G
+                elif [[ $size_bytes -gt 1048576 ]]; then
+                    size_hr=$(echo "scale=2; $size_bytes/1048576" | bc)M
+                elif [[ $size_bytes -gt 1024 ]]; then
+                    size_hr=$(echo "scale=2; $size_bytes/1024" | bc)K
+                else
+                    size_hr="${size_bytes}B"
+                fi
+                printf "%10s  %s\n" "$size_hr" "$dir_name"
+            fi
+        done | sort -hr
+    else
+        # For deeper levels, use ncdu output format approximation
+        rclone ncdu "$FULL_PATH" 2>/dev/null || rclone size "$FULL_PATH"
+    fi
+fi

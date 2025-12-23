@@ -1,0 +1,103 @@
+#!/bin/bash
+# gd-info - Get information about files/folders on Google Drive
+# Usage: gd-info <path>
+
+REMOTE="${GD_REMOTE:-gdrive}"
+
+show_help() {
+    cat << EOF
+Usage: gd-info <path> [options]
+
+Get detailed information about a file or folder on Google Drive.
+
+Arguments:
+    path            Path to file or folder
+
+Options:
+    --json          Output in JSON format
+    -h, --help      Show this help message
+
+Environment:
+    GD_REMOTE       rclone remote name (default: gdrive)
+
+Examples:
+    gd-info Documents/report.pdf
+    gd-info Projects/
+    gd-info --json myfile.txt
+EOF
+}
+
+# Defaults
+TARGET=""
+JSON_OUTPUT=false
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --json)
+            JSON_OUTPUT=true
+            shift
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+        *)
+            TARGET="$1"
+            shift
+            ;;
+    esac
+done
+
+if [[ -z "$TARGET" ]]; then
+    echo "Error: Path required" >&2
+    echo "Use 'gd-info --help' for usage information" >&2
+    exit 1
+fi
+
+FULL_PATH="${REMOTE}:${TARGET}"
+
+# Get size info
+echo "=== File Information ==="
+echo "Path: $TARGET"
+echo ""
+
+# Check if it's a directory
+IS_DIR=$(rclone lsd "$FULL_PATH" 2>/dev/null)
+
+if [[ -n "$IS_DIR" ]] || [[ "$TARGET" == */ ]]; then
+    echo "Type: Directory"
+    echo ""
+    echo "=== Contents ==="
+    
+    # Count files and folders
+    FILE_COUNT=$(rclone ls "$FULL_PATH" --recursive 2>/dev/null | wc -l)
+    DIR_COUNT=$(rclone lsd "$FULL_PATH" --recursive 2>/dev/null | wc -l)
+    
+    echo "Files: $FILE_COUNT"
+    echo "Subdirectories: $DIR_COUNT"
+    echo ""
+    
+    # Total size
+    echo "=== Size ==="
+    rclone size "$FULL_PATH" 2>/dev/null
+else
+    echo "Type: File"
+    echo ""
+    
+    # File details
+    echo "=== Details ==="
+    rclone lsl "$FULL_PATH" 2>/dev/null | while read size date time name; do
+        echo "Size: $size bytes"
+        echo "Modified: $date $time"
+    done
+    
+    # Get MIME type if available
+    echo ""
+    echo "=== Metadata ==="
+    rclone lsjson "$FULL_PATH" 2>/dev/null | grep -E '"(MimeType|ID|Name)"' | sed 's/[",]//g' | sed 's/^[ \t]*//'
+fi

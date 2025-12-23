@@ -1,0 +1,90 @@
+#!/bin/bash
+# gd-link - Get shareable link for a file on Google Drive
+# Usage: gd-link <path>
+
+REMOTE="${GD_REMOTE:-gdrive}"
+
+show_help() {
+    cat << EOF
+Usage: gd-link <path> [options]
+
+Get a shareable link for a file on Google Drive.
+
+Arguments:
+    path            Path to file
+
+Options:
+    -c, --copy      Copy link to clipboard (requires xclip or pbcopy)
+    -h, --help      Show this help message
+
+Environment:
+    GD_REMOTE       rclone remote name (default: gdrive)
+
+Examples:
+    gd-link Documents/report.pdf
+    gd-link -c myfile.txt           # Copy to clipboard
+EOF
+}
+
+# Defaults
+TARGET=""
+COPY=false
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -c|--copy)
+            COPY=true
+            shift
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+        *)
+            TARGET="$1"
+            shift
+            ;;
+    esac
+done
+
+if [[ -z "$TARGET" ]]; then
+    echo "Error: Path required" >&2
+    echo "Use 'gd-link --help' for usage information" >&2
+    exit 1
+fi
+
+FULL_PATH="${REMOTE}:${TARGET}"
+
+# Get file ID from JSON output
+FILE_ID=$(rclone lsjson "$FULL_PATH" 2>/dev/null | grep -o '"ID":"[^"]*"' | head -1 | sed 's/"ID":"//;s/"//')
+
+if [[ -z "$FILE_ID" ]]; then
+    echo "Error: Could not find file: $TARGET" >&2
+    exit 1
+fi
+
+# Construct link
+LINK="https://drive.google.com/file/d/${FILE_ID}/view"
+
+echo "$LINK"
+
+# Copy to clipboard if requested
+if $COPY; then
+    if command -v pbcopy &> /dev/null; then
+        echo -n "$LINK" | pbcopy
+        echo "(Copied to clipboard)"
+    elif command -v xclip &> /dev/null; then
+        echo -n "$LINK" | xclip -selection clipboard
+        echo "(Copied to clipboard)"
+    elif command -v xsel &> /dev/null; then
+        echo -n "$LINK" | xsel --clipboard
+        echo "(Copied to clipboard)"
+    else
+        echo "(Install xclip or xsel to enable clipboard copy)"
+    fi
+fi

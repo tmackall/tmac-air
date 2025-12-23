@@ -1,0 +1,61 @@
+#!/bin/bash
+# gd-mkdir - Create directories on Google Drive
+# Usage: gd-mkdir <path>
+
+REMOTE="${GD_REMOTE:-gdrive}"
+
+show_help() {
+    cat << EOF
+Usage: gd-mkdir <path> [options]
+
+Create a directory on Google Drive.
+
+Arguments:
+    path            Path of directory to create
+
+Options:
+    -p, --parents   Create parent directories as needed (default behavior)
+    -h, --help      Show this help message
+
+Environment:
+    GD_REMOTE       rclone remote name (default: gdrive)
+
+Examples:
+    gd-mkdir Projects/NewProject
+    gd-mkdir "Backups/2024/January"
+EOF
+}
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -p|--parents)
+            # Default behavior, just accept the flag
+            shift
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+        *)
+            TARGET="$1"
+            shift
+            ;;
+    esac
+done
+
+if [[ -z "$TARGET" ]]; then
+    echo "Error: Directory path required" >&2
+    echo "Use 'gd-mkdir --help' for usage information" >&2
+    exit 1
+fi
+
+rclone mkdir "${REMOTE}:${TARGET}"
+
+if [[ $? -eq 0 ]]; then
+    echo "Created: $TARGET"
+fi

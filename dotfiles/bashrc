@@ -47,6 +47,9 @@ export LESS='-R --quit-if-one-screen'
 if [ -d "$HOME/bin" ]; then
     export PATH="$HOME/bin:$PATH"
 fi
+if [ -d "$HOME/bin/gd-scripts" ]; then
+    export PATH="$HOME/bin/gd-scripts:$PATH"
+fi
 
 if [ -d "$HOME/.local/bin" ]; then
     export PATH="$HOME/.local/bin:$PATH"

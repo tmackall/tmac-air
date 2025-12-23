@@ -1,0 +1,140 @@
+#!/bin/bash
+# gd-rm - Delete files from Google Drive
+# Usage: gd-rm <path> [options]
+
+REMOTE="${GD_REMOTE:-gdrive}"
+
+show_help() {
+    cat << EOF
+Usage: gd-rm <path> [options]
+
+Delete files or directories from Google Drive.
+Supports glob patterns (*, ?, []) in file names.
+
+Arguments:
+    path            Path in Google Drive to delete (supports globs)
+
+Options:
+    -r, --recursive Delete directories recursively (required for folders)
+    -n, --dry-run   Show what would be deleted without deleting
+    -f, --force     Skip confirmation prompt
+    -v, --verbose   Verbose output
+    -h, --help      Show this help message
+
+Environment:
+    GD_REMOTE       rclone remote name (default: gdrive)
+
+Examples:
+    gd-rm Documents/old-file.txt        # Delete a file
+    gd-rm -r OldProject/                # Delete folder recursively
+    gd-rm -n -r Photos/2020/            # Dry run - see what would be deleted
+    gd-rm -f taxes/2015/*.html          # Delete all HTML files in folder
+    gd-rm -f "backup/*.tmp"             # Delete by pattern
+    gd-rm -f logs/app-202[0-3]*.log     # Delete with character class
+EOF
+}
+
+# Defaults
+RECURSIVE=false
+DRY_RUN=""
+FORCE=false
+VERBOSE=""
+TARGET=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -r|--recursive)
+            RECURSIVE=true
+            shift
+            ;;
+        -n|--dry-run)
+            DRY_RUN="--dry-run"
+            shift
+            ;;
+        -f|--force)
+            FORCE=true
+            shift
+            ;;
+        -v|--verbose)
+            VERBOSE="-v"
+            shift
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+        *)
+            TARGET="$1"
+            shift
+            ;;
+    esac
+done
+
+if [[ -z "$TARGET" ]]; then
+    echo "Error: Path required" >&2
+    echo "Use 'gd-rm --help' for usage information" >&2
+    exit 1
+fi
+
+# Check if path contains glob patterns
+has_glob() {
+    [[ "$1" == *'*'* ]] || [[ "$1" == *'?'* ]] || [[ "$1" == *'['* ]]
+}
+
+if has_glob "$TARGET"; then
+    # Extract directory and pattern
+    DIR_PATH=$(dirname "$TARGET")
+    PATTERN=$(basename "$TARGET")
+    
+    # Handle root directory case
+    if [[ "$DIR_PATH" == "." ]]; then
+        DIR_PATH=""
+    fi
+    
+    FULL_PATH="${REMOTE}:${DIR_PATH}"
+    
+    # Show what will be deleted (search recursively to find files in subdirs)
+    echo "Matching files:"
+    rclone ls "$FULL_PATH" --include "$PATTERN" --include "**/$PATTERN" --recursive 2>/dev/null
+    
+    MATCH_COUNT=$(rclone ls "$FULL_PATH" --include "$PATTERN" --include "**/$PATTERN" --recursive 2>/dev/null | wc -l)
+    
+    if [[ $MATCH_COUNT -eq 0 ]]; then
+        echo "No files matching '$PATTERN' in '$DIR_PATH'"
+        exit 0
+    fi
+    
+    # Confirmation prompt unless forced or dry-run
+    if ! $FORCE && [[ -z "$DRY_RUN" ]]; then
+        read -p "Delete $MATCH_COUNT file(s) matching '$PATTERN' from '$DIR_PATH'? [y/N] " confirm
+        if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+            echo "Cancelled"
+            exit 0
+        fi
+    fi
+    
+    rclone delete $DRY_RUN $VERBOSE "$FULL_PATH" --include "$PATTERN" --include "**/$PATTERN" --recursive
+else
+    # No glob - original behavior
+    FULL_PATH="${REMOTE}:${TARGET}"
+    
+    # Confirmation prompt unless forced or dry-run
+    if ! $FORCE && [[ -z "$DRY_RUN" ]]; then
+        read -p "Delete '$TARGET' from Google Drive? [y/N] " confirm
+        if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+            echo "Cancelled"
+            exit 0
+        fi
+    fi
+    
+    if $RECURSIVE; then
+        rclone purge $DRY_RUN $VERBOSE "$FULL_PATH"
+    else
+        rclone delete $DRY_RUN $VERBOSE "$FULL_PATH"
+    fi
+fi

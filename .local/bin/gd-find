@@ -1,0 +1,121 @@
+#!/bin/bash
+# gd-find - Search for files on Google Drive
+# Usage: gd-find [path] <pattern> [options]
+
+REMOTE="${GD_REMOTE:-gdrive}"
+
+show_help() {
+    cat << EOF
+Usage: gd-find [path] [options]
+
+Search for files on Google Drive by name pattern.
+
+Arguments:
+    path            Path to search in (default: root)
+
+Options:
+    -n, --name      File name pattern (glob style: *.txt, report*)
+    -t, --type      File type: f (files), d (directories)
+    -s, --size      Size filter (e.g., +10M for >10MB, -1G for <1GB)
+    --newer         Files newer than date (YYYY-MM-DD)
+    --older         Files older than date (YYYY-MM-DD)
+    -h, --help      Show this help message
+
+Environment:
+    GD_REMOTE       rclone remote name (default: gdrive)
+
+Examples:
+    gd-find -n "*.pdf"                  # Find all PDFs
+    gd-find Documents -n "report*"      # Find reports in Documents
+    gd-find -t d                        # Find all directories
+    gd-find -s +100M                    # Find files larger than 100MB
+    gd-find --older 2023-01-01          # Find old files
+EOF
+}
+
+# Defaults
+SEARCH_PATH=""
+NAME_PATTERN=""
+FILE_TYPE=""
+SIZE_FILTER=""
+NEWER=""
+OLDER=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -n|--name)
+            NAME_PATTERN="$2"
+            shift 2
+            ;;
+        -t|--type)
+            FILE_TYPE="$2"
+            shift 2
+            ;;
+        -s|--size)
+            SIZE_FILTER="$2"
+            shift 2
+            ;;
+        --newer)
+            NEWER="$2"
+            shift 2
+            ;;
+        --older)
+            OLDER="$2"
+            shift 2
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+        *)
+            SEARCH_PATH="$1"
+            shift
+            ;;
+    esac
+done
+
+# Build filter arguments
+FILTERS=""
+
+if [[ -n "$NAME_PATTERN" ]]; then
+    FILTERS="$FILTERS --include '$NAME_PATTERN'"
+fi
+
+if [[ -n "$SIZE_FILTER" ]]; then
+    if [[ "$SIZE_FILTER" == +* ]]; then
+        FILTERS="$FILTERS --min-size ${SIZE_FILTER#+}"
+    elif [[ "$SIZE_FILTER" == -* ]]; then
+        FILTERS="$FILTERS --max-size ${SIZE_FILTER#-}"
+    fi
+fi
+
+if [[ -n "$NEWER" ]]; then
+    FILTERS="$FILTERS --min-age ${NEWER}"
+fi
+
+if [[ -n "$OLDER" ]]; then
+    FILTERS="$FILTERS --max-age ${OLDER}"
+fi
+
+# Choose command based on type
+if [[ "$FILE_TYPE" == "d" ]]; then
+    CMD="rclone lsd"
+elif [[ "$FILE_TYPE" == "f" ]]; then
+    CMD="rclone ls"
+else
+    CMD="rclone ls"
+fi
+
+# Execute with eval to handle quoted filters
+eval $CMD $FILTERS "${REMOTE}:${SEARCH_PATH}" --recursive 2>/dev/null | head -100
+
+# Note about results
+RESULT_COUNT=$(eval $CMD $FILTERS "${REMOTE}:${SEARCH_PATH}" --recursive 2>/dev/null | wc -l)
+if [[ $RESULT_COUNT -gt 100 ]]; then
+    echo "... (showing first 100 of $RESULT_COUNT results)"
+fi

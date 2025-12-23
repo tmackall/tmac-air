@@ -1,0 +1,91 @@
+#!/bin/bash
+# gd-mv - Move/rename files on Google Drive
+# Usage: gd-mv <source> <dest> [options]
+
+REMOTE="${GD_REMOTE:-gdrive}"
+
+show_help() {
+    cat << EOF
+Usage: gd-mv <source> <dest> [options]
+
+Move or rename files on Google Drive.
+Prefix remote paths with ':' to indicate Google Drive.
+
+Arguments:
+    source          Source path (use : prefix for Drive)
+    dest            Destination path (use : prefix for Drive)
+
+Options:
+    -n, --dry-run   Show what would be moved without moving
+    -v, --verbose   Verbose output
+    -h, --help      Show this help message
+
+Environment:
+    GD_REMOTE       rclone remote name (default: gdrive)
+
+Examples:
+    gd-mv :old-name.txt :new-name.txt           # Rename file
+    gd-mv :Documents/file.txt :Archive/         # Move to folder
+    gd-mv ./local.txt :Documents/               # Upload and delete local
+    gd-mv :Documents/file.txt ./                # Download and delete remote
+EOF
+}
+
+expand_path() {
+    local path="$1"
+    if [[ "$path" == :* ]]; then
+        echo "${REMOTE}:${path#:}"
+    else
+        echo "$path"
+    fi
+}
+
+# Defaults
+DRY_RUN=""
+VERBOSE=""
+SOURCE=""
+DEST=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -n|--dry-run)
+            DRY_RUN="--dry-run"
+            shift
+            ;;
+        -v|--verbose)
+            VERBOSE="-v"
+            shift
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+        *)
+            if [[ -z "$SOURCE" ]]; then
+                SOURCE="$1"
+            elif [[ -z "$DEST" ]]; then
+                DEST="$1"
+            else
+                echo "Too many arguments" >&2
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
+
+if [[ -z "$SOURCE" ]] || [[ -z "$DEST" ]]; then
+    echo "Error: Both source and destination required" >&2
+    echo "Use 'gd-mv --help' for usage information" >&2
+    exit 1
+fi
+
+SOURCE=$(expand_path "$SOURCE")
+DEST=$(expand_path "$DEST")
+
+rclone move $DRY_RUN $VERBOSE "$SOURCE" "$DEST"

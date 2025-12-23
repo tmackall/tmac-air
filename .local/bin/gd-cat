@@ -1,0 +1,73 @@
+#!/bin/bash
+# gd-cat - View contents of a file on Google Drive
+# Usage: gd-cat <path>
+
+REMOTE="${GD_REMOTE:-gdrive}"
+
+show_help() {
+    cat << EOF
+Usage: gd-cat <path> [options]
+
+Display contents of a text file from Google Drive.
+
+Arguments:
+    path            Path to file
+
+Options:
+    -n, --number    Number all output lines
+    -h, --help      Show this help message
+
+Environment:
+    GD_REMOTE       rclone remote name (default: gdrive)
+
+Examples:
+    gd-cat Documents/notes.txt
+    gd-cat -n config.json
+    gd-cat README.md | head -20
+EOF
+}
+
+# Defaults
+TARGET=""
+NUMBER_LINES=false
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -n|--number)
+            NUMBER_LINES=true
+            shift
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+        *)
+            TARGET="$1"
+            shift
+            ;;
+    esac
+done
+
+if [[ -z "$TARGET" ]]; then
+    echo "Error: Path required" >&2
+    echo "Use 'gd-cat --help' for usage information" >&2
+    exit 1
+fi
+
+FULL_PATH="${REMOTE}:${TARGET}"
+
+if $NUMBER_LINES; then
+    rclone cat "$FULL_PATH" 2>/dev/null | nl
+else
+    rclone cat "$FULL_PATH" 2>/dev/null
+fi
+
+if [[ $? -ne 0 ]]; then
+    echo "Error: Could not read file: $TARGET" >&2
+    exit 1
+fi

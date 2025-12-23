@@ -1,0 +1,98 @@
+#!/bin/bash
+# gd-cp - Copy files to/from Google Drive
+# Usage: gd-cp <source> <dest> [options]
+
+REMOTE="${GD_REMOTE:-gdrive}"
+
+show_help() {
+    cat << EOF
+Usage: gd-cp <source> <dest> [options]
+
+Copy files between local filesystem and Google Drive.
+Prefix remote paths with ':' to indicate Google Drive.
+
+Arguments:
+    source          Source path (use : prefix for Drive)
+    dest            Destination path (use : prefix for Drive)
+
+Options:
+    -p, --progress  Show progress during transfer
+    -n, --dry-run   Show what would be copied without copying
+    -v, --verbose   Verbose output
+    -h, --help      Show this help message
+
+Environment:
+    GD_REMOTE       rclone remote name (default: gdrive)
+
+Examples:
+    gd-cp file.txt :Documents/          # Upload file
+    gd-cp :Documents/file.txt ./        # Download file
+    gd-cp -p :Photos/ ./photos/         # Download folder with progress
+    gd-cp ./backup/ :Backups/today/     # Upload folder
+    gd-cp :Folder1/file.txt :Folder2/   # Copy within Drive
+EOF
+}
+
+expand_path() {
+    local path="$1"
+    if [[ "$path" == :* ]]; then
+        echo "${REMOTE}:${path#:}"
+    else
+        echo "$path"
+    fi
+}
+
+# Defaults
+PROGRESS=""
+DRY_RUN=""
+VERBOSE=""
+SOURCE=""
+DEST=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -p|--progress)
+            PROGRESS="--progress"
+            shift
+            ;;
+        -n|--dry-run)
+            DRY_RUN="--dry-run"
+            shift
+            ;;
+        -v|--verbose)
+            VERBOSE="-v"
+            shift
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+        *)
+            if [[ -z "$SOURCE" ]]; then
+                SOURCE="$1"
+            elif [[ -z "$DEST" ]]; then
+                DEST="$1"
+            else
+                echo "Too many arguments" >&2
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
+
+if [[ -z "$SOURCE" ]] || [[ -z "$DEST" ]]; then
+    echo "Error: Both source and destination required" >&2
+    echo "Use 'gd-cp --help' for usage information" >&2
+    exit 1
+fi
+
+SOURCE=$(expand_path "$SOURCE")
+DEST=$(expand_path "$DEST")
+
+rclone copy $PROGRESS $DRY_RUN $VERBOSE "$SOURCE" "$DEST"

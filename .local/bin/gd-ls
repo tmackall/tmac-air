@@ -1,0 +1,106 @@
+#!/bin/bash
+# gd-ls - List files and directories in Google Drive
+# Usage: gd-ls [path] [options]
+
+REMOTE="${GD_REMOTE:-gdrive}"
+
+show_help() {
+    cat << EOF
+Usage: gd-ls [path] [options]
+
+List files and directories in Google Drive.
+Supports glob patterns (*, ?, []) in path.
+
+Arguments:
+    path            Path in Google Drive (default: root, supports globs)
+
+Options:
+    -l, --long      Long format with size and date
+    -d, --dirs      List directories only
+    -r, --recursive List recursively
+    -h, --help      Show this help message
+
+Environment:
+    GD_REMOTE       rclone remote name (default: gdrive)
+
+Examples:
+    gd-ls                       # List root
+    gd-ls Documents             # List Documents folder
+    gd-ls -l Projects           # Long format
+    gd-ls -d                    # Directories only
+    gd-ls -r Photos             # Recursive listing
+    gd-ls taxes/tax*            # Glob pattern matching
+    gd-ls "*.pdf"               # All PDFs in root
+    gd-ls -l backup/*.sql       # Long format with glob
+EOF
+}
+
+# Defaults
+PATH_ARG=""
+LONG=false
+DIRS_ONLY=false
+RECURSIVE=false
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -l|--long)
+            LONG=true
+            shift
+            ;;
+        -d|--dirs)
+            DIRS_ONLY=true
+            shift
+            ;;
+        -r|--recursive)
+            RECURSIVE=true
+            shift
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+        *)
+            PATH_ARG="$1"
+            shift
+            ;;
+    esac
+done
+
+# Check if path contains glob patterns
+has_glob() {
+    [[ "$1" == *'*'* ]] || [[ "$1" == *'?'* ]] || [[ "$1" == *'['* ]]
+}
+
+# Build base command
+if $DIRS_ONLY; then
+    CMD="rclone lsd"
+elif $LONG; then
+    CMD="rclone lsl"
+else
+    CMD="rclone ls"
+fi
+
+if $RECURSIVE; then
+    CMD="$CMD --recursive"
+fi
+
+# Handle glob patterns
+if has_glob "$PATH_ARG"; then
+    DIR_PATH=$(dirname "$PATH_ARG")
+    PATTERN=$(basename "$PATH_ARG")
+    
+    # Handle root directory case
+    if [[ "$DIR_PATH" == "." ]]; then
+        DIR_PATH=""
+    fi
+    
+    # Always search recursively with globs to find files in subdirectories
+    $CMD "${REMOTE}:${DIR_PATH}" --include "$PATTERN" --include "**/$PATTERN" --recursive
+else
+    $CMD "${REMOTE}:${PATH_ARG}"
+fi

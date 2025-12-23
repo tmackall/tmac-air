@@ -1,0 +1,117 @@
+#!/bin/bash
+# gd-sync - Synchronize folders with Google Drive
+# Usage: gd-sync <source> <dest> [options]
+
+REMOTE="${GD_REMOTE:-gdrive}"
+
+show_help() {
+    cat << EOF
+Usage: gd-sync <source> <dest> [options]
+
+Synchronize folders between local filesystem and Google Drive.
+Makes destination match source, deleting extra files in destination.
+
+Prefix remote paths with ':' to indicate Google Drive.
+
+Arguments:
+    source          Source path (use : prefix for Drive)
+    dest            Destination path (use : prefix for Drive)
+
+Options:
+    -p, --progress  Show progress during transfer
+    -n, --dry-run   Show what would happen without making changes
+    -v, --verbose   Verbose output
+    --backup        Backup destination files before deleting
+    -h, --help      Show this help message
+
+Environment:
+    GD_REMOTE       rclone remote name (default: gdrive)
+
+Examples:
+    gd-sync ./documents :Documents/     # Upload: make Drive match local
+    gd-sync :Documents/ ./documents     # Download: make local match Drive
+    gd-sync -n ./folder :Backup/        # Dry run first
+    gd-sync -p ./photos :Photos/        # Sync with progress
+EOF
+}
+
+expand_path() {
+    local path="$1"
+    if [[ "$path" == :* ]]; then
+        echo "${REMOTE}:${path#:}"
+    else
+        echo "$path"
+    fi
+}
+
+# Defaults
+PROGRESS=""
+DRY_RUN=""
+VERBOSE=""
+BACKUP=""
+SOURCE=""
+DEST=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -p|--progress)
+            PROGRESS="--progress"
+            shift
+            ;;
+        -n|--dry-run)
+            DRY_RUN="--dry-run"
+            shift
+            ;;
+        -v|--verbose)
+            VERBOSE="-v"
+            shift
+            ;;
+        --backup)
+            BACKUP="--backup-dir=${REMOTE}:Backups/sync-$(date +%Y%m%d-%H%M%S)"
+            shift
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+        *)
+            if [[ -z "$SOURCE" ]]; then
+                SOURCE="$1"
+            elif [[ -z "$DEST" ]]; then
+                DEST="$1"
+            else
+                echo "Too many arguments" >&2
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
+
+if [[ -z "$SOURCE" ]] || [[ -z "$DEST" ]]; then
+    echo "Error: Both source and destination required" >&2
+    echo "Use 'gd-sync --help' for usage information" >&2
+    exit 1
+fi
+
+SOURCE=$(expand_path "$SOURCE")
+DEST=$(expand_path "$DEST")
+
+# Warning for destructive operation
+if [[ -z "$DRY_RUN" ]]; then
+    echo "WARNING: Sync will delete files in destination that don't exist in source."
+    echo "Source: $SOURCE"
+    echo "Dest:   $DEST"
+    read -p "Continue? [y/N] " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Cancelled. Use --dry-run to preview changes safely."
+        exit 0
+    fi
+fi
+
+rclone sync $PROGRESS $DRY_RUN $VERBOSE $BACKUP "$SOURCE" "$DEST"
