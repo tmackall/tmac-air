@@ -1,5 +1,6 @@
 backup() {
     local dest=""
+    local use_epoch=0
     local sources=()
 
     # Parse arguments
@@ -9,18 +10,24 @@ backup() {
                 dest="$2"
                 shift 2
                 ;;
+            -e|--epoch)
+                use_epoch=1
+                shift
+                ;;
             -h|--help)
                 cat <<EOF
 Usage: backup [options] <path> [path...]
 
 Options:
     -o, --output FILE    Output filename (default: auto-generated)
+    -e, --epoch          Use epoch timestamp in filename
     -h, --help           Show this help
 
 Examples:
     backup ~/.ssh
     backup ~/.ssh ~/.gnupg
     backup -o secrets.age ~/.ssh ~/.gnupg ~/.config/gh
+    backup -e ~/.ssh                # -> backup-ssh-1703345678.age
 EOF
                 return 0
                 ;;
@@ -32,9 +39,8 @@ EOF
     done
 
     if [[ ${#sources[@]} -eq 0 ]]; then
-        echo "Error: No paths specified"
-        echo "Run 'backup --help' for usage"
-        return 1
+        backup --help
+        return 0
     fi
 
     # Validate all sources exist
@@ -47,10 +53,20 @@ EOF
 
     # Generate default filename
     if [[ -z "$dest" ]]; then
-        if [[ ${#sources[@]} -eq 1 ]]; then
-            dest="backup-$(basename "${sources[0]}")-$(date +%Y%m%d).age"
+        local timestamp
+        if [[ $use_epoch -eq 1 ]]; then
+            timestamp=$(date +%s)
         else
-            dest="backup-$(date +%Y%m%d-%H%M%S).age"
+            timestamp=$(date +%Y%m%d)
+        fi
+        if [[ ${#sources[@]} -eq 1 ]]; then
+            dest="backup-$(basename "${sources[0]}")-${timestamp}.age"
+        else
+            if [[ $use_epoch -eq 1 ]]; then
+                dest="backup-${timestamp}.age"
+            else
+                dest="backup-$(date +%Y%m%d-%H%M%S).age"
+            fi
         fi
     fi
 
@@ -76,7 +92,7 @@ backup-list() {
 
     if [[ -z "$backup_file" ]]; then
         echo "Usage: backup-list <backup.age>"
-        return 1
+        return 0
     fi
 
     if [[ ! -f "$backup_file" ]]; then
@@ -127,9 +143,8 @@ EOF
     done
 
     if [[ -z "$backup_file" ]]; then
-        echo "Error: No backup file specified"
-        echo "Run 'restore --help' for usage"
-        return 1
+        restore --help
+        return 0
     fi
 
     if [[ ! -f "$backup_file" ]]; then

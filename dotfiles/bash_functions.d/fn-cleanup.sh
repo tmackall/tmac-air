@@ -1,7 +1,8 @@
-sanitize-filename() {
+fn-cleanup() {
     local dry_run=0
     local recursive=0
     local lowercase=0
+    local add_date=""
     local files=()
 
     while [[ $# -gt 0 ]]; do
@@ -18,9 +19,17 @@ sanitize-filename() {
                 lowercase=1
                 shift
                 ;;
+            -t|--timestamp)
+                add_date="timestamp"
+                shift
+                ;;
+            -e|--epoch)
+                add_date="epoch"
+                shift
+                ;;
             -h|--help)
                 cat <<EOF
-Usage: sanitize-filename [options] <file|dir> [file|dir...]
+Usage: fn-cleanup [options] <file|dir> [file|dir...]
 
 Cleans up filenames by removing/replacing problematic characters.
 
@@ -37,13 +46,17 @@ Options:
     -n, --dry-run     Show what would be renamed
     -r, --recursive   Process directories recursively
     -l, --lowercase   Convert to lowercase
+    -t, --timestamp   Add date suffix (YYYYMMDD)
+    -e, --epoch       Add epoch timestamp suffix
     -h, --help        Show this help
 
 Examples:
-    sanitize-filename "My File (1).pdf"
-    sanitize-filename -n *.pdf
-    sanitize-filename -r ~/Downloads
-    sanitize-filename -rl ~/Documents/Project
+    fn-cleanup "My File (1).pdf"
+    fn-cleanup -n *.pdf
+    fn-cleanup -r ~/Downloads
+    fn-cleanup -rl ~/Documents/Project
+    fn-cleanup -t report.pdf          # -> report-20241223.pdf
+    fn-cleanup -e screenshot.png      # -> screenshot-1703345678.png
 EOF
                 return 0
                 ;;
@@ -55,12 +68,12 @@ EOF
     done
 
     if [[ ${#files[@]} -eq 0 ]]; then
-        echo "Error: No files specified"
-        return 1
+        fn-cleanup --help
+        return 0
     fi
 
     # Process a single file/directory name
-    _sanitize_one() {
+    _fn_cleanup_one() {
         local file="$1"
 
         if [[ ! -e "$file" ]]; then
@@ -98,6 +111,21 @@ EOF
             new_name=$(echo "$new_name" | tr '[:upper:]' '[:lower:]')
         fi
 
+        # Add date suffix if requested
+        if [[ -n "$add_date" ]]; then
+            local base_name="${new_name%.*}"
+            local ext=""
+            if [[ "$new_name" == *.* && ! -d "$file" ]]; then
+                ext=".${new_name##*.}"
+            fi
+            if [[ "$add_date" == "epoch" ]]; then
+                base_name="${base_name}-$(date +%s)"
+            else
+                base_name="${base_name}-$(date +%Y%m%d)"
+            fi
+            new_name="${base_name}${ext}"
+        fi
+
         # Skip if no change
         if [[ "$name" == "$new_name" ]]; then
             return 0
@@ -132,29 +160,29 @@ EOF
     }
 
     # Process files, optionally recursively
-    _sanitize_path() {
+    _fn_cleanup_path() {
         local path="$1"
 
         if [[ -d "$path" && $recursive -eq 1 ]]; then
             # Process contents first (depth-first)
             for item in "$path"/*; do
                 [[ -e "$item" ]] || continue
-                _sanitize_path "$item"
+                _fn_cleanup_path "$item"
             done
             # Process hidden files too
             for item in "$path"/.*; do
                 [[ -e "$item" ]] || continue
                 [[ "$(basename "$item")" == "." || "$(basename "$item")" == ".." ]] && continue
-                _sanitize_path "$item"
+                _fn_cleanup_path "$item"
             done
         fi
 
         # Now process the path itself
-        _sanitize_one "$path" > /dev/null
+        _fn_cleanup_one "$path" > /dev/null
     }
 
     # Main processing with simpler output
-    _process() {
+    _fn_cleanup_process() {
         local file="$1"
 
         if [[ ! -e "$file" ]]; then
@@ -166,19 +194,19 @@ EOF
             # Process contents first (depth-first)
             for item in "$file"/*; do
                 [[ -e "$item" ]] || continue
-                _process "$item"
+                _fn_cleanup_process "$item"
             done
             for item in "$file"/.*; do
                 [[ -e "$item" ]] || continue
                 [[ "$(basename "$item")" == "." || "$(basename "$item")" == ".." ]] && continue
-                _process "$item"
+                _fn_cleanup_process "$item"
             done
         fi
 
-        _sanitize_one "$file"
+        _fn_cleanup_one "$file"
     }
 
     for file in "${files[@]}"; do
-        _process "$file" | grep -v "^/"  # Filter out path returns, show only rename messages
+        _fn_cleanup_process "$file" | grep -v "^/"  # Filter out path returns, show only rename messages
     done
 }

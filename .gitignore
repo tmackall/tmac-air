@@ -13,6 +13,7 @@
 .viminfo
 .zsh_history
 .zsh_sessions
+/*.age
 /*.pub
 /*.zip
 /bitwarden
