@@ -10,9 +10,10 @@ Usage: gd-cp <source> <dest> [options]
 
 Copy files between local filesystem and Google Drive.
 Prefix remote paths with ':' to indicate Google Drive.
+Supports glob patterns (*, ?, []) in source path.
 
 Arguments:
-    source          Source path (use : prefix for Drive)
+    source          Source path (use : prefix for Drive, supports globs)
     dest            Destination path (use : prefix for Drive)
 
 Options:
@@ -30,9 +31,22 @@ Examples:
     gd-cp -p :Photos/ ./photos/         # Download folder with progress
     gd-cp ./backup/ :Backups/today/     # Upload folder
     gd-cp :Folder1/file.txt :Folder2/   # Copy within Drive
+    gd-cp ":Photos/2013/*" ./           # Download with glob pattern
+    gd-cp ":Backup/*.sql" ./dumps/      # Download matching files
 EOF
 }
 
+# Check if path contains glob patterns
+has_glob() {
+    [[ "$1" == *'*'* ]] || [[ "$1" == *'?'* ]] || [[ "$1" == *'['* ]]
+}
+
+# Check if path is a remote (Drive) path
+is_remote() {
+    [[ "$1" == :* ]]
+}
+
+# Expand path, optionally extracting just the directory part
 expand_path() {
     local path="$1"
     if [[ "$path" == :* ]]; then
@@ -92,7 +106,49 @@ if [[ -z "$SOURCE" ]] || [[ -z "$DEST" ]]; then
     exit 1
 fi
 
-SOURCE=$(expand_path "$SOURCE")
-DEST=$(expand_path "$DEST")
+# Get the path without the : prefix for glob checking
+SOURCE_PATH="${SOURCE#:}"
 
-rclone copy $PROGRESS $DRY_RUN $VERBOSE "$SOURCE" "$DEST"
+# Check if source has glob patterns
+if has_glob "$SOURCE_PATH"; then
+    # Extract directory and pattern
+    DIR_PATH=$(dirname "$SOURCE_PATH")
+    PATTERN=$(basename "$SOURCE_PATH")
+    
+    # Handle root directory case
+    if [[ "$DIR_PATH" == "." ]]; then
+        DIR_PATH=""
+    fi
+    
+    # Build the full source path (directory only)
+    if is_remote "$SOURCE"; then
+        FULL_SOURCE="${REMOTE}:${DIR_PATH}"
+    else
+        FULL_SOURCE="$DIR_PATH"
+    fi
+    
+    # Expand destination
+    FULL_DEST=$(expand_path "$DEST")
+    
+    # Build include patterns using array for proper quoting
+    INCLUDE_ARGS=(
+        --include "$PATTERN"
+        --include "$PATTERN/**"
+        --include "**/$PATTERN"
+        --include "**/$PATTERN/**"
+    )
+    
+    if [[ -n "$VERBOSE" ]]; then
+        echo "Source dir: $FULL_SOURCE"
+        echo "Pattern: $PATTERN"
+        echo "Dest: $FULL_DEST"
+    fi
+    
+    rclone copy $PROGRESS $DRY_RUN $VERBOSE "$FULL_SOURCE" "$FULL_DEST" "${INCLUDE_ARGS[@]}"
+else
+    # No glob - standard copy
+    SOURCE=$(expand_path "$SOURCE")
+    DEST=$(expand_path "$DEST")
+    
+    rclone copy $PROGRESS $DRY_RUN $VERBOSE "$SOURCE" "$DEST"
+fi
