@@ -9,6 +9,13 @@ Host *
     ServerAliveCountMax 3
 
 # Local network hosts - update IPs as needed
+Host bexley-l
+    HostName 192.168.86.25
+    User tmackall
+
+Host pi
+    HostName 192.168.1.50
+    User pi
 Host pi
     HostName 192.168.1.50
     User pi

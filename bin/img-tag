@@ -1,0 +1,327 @@
+#!/bin/bash
+# img-tag - Analyze images and generate tags using AI (ollama)
+# Usage: img-tag <image_or_directory> [options]
+# Compatible with macOS and Linux
+
+MODEL="${IMG_TAG_MODEL:-llava}"
+TIMEOUT_SECS="${IMG_TAG_TIMEOUT:-60}"
+
+show_help() {
+    cat << EOF
+Usage: img-tag <path>... [options]
+
+Analyze images using AI vision models and generate descriptive tags.
+Requires: ollama with a vision model installed
+
+Arguments:
+    path            Image file(s) or directory to process (supports multiple)
+
+Options:
+    -m, --model     Model to use (default: llava, options: llava, llama3.2-vision)
+    -o, --output    Output file for results (default: stdout)
+    -f, --format    Output format: tags, json, csv (default: tags)
+    -r, --recursive Process directories recursively
+    -t, --timeout   Timeout per image in seconds (default: 60)
+    -v, --verbose   Show progress
+    -h, --help      Show this help message
+
+Environment:
+    IMG_TAG_MODEL   Default model (default: llava)
+    IMG_TAG_TIMEOUT Default timeout in seconds (default: 60)
+
+Setup (macOS):
+    # Install ollama
+    brew install ollama
+    # Or download from https://ollama.ai
+    
+    # Start ollama service
+    ollama serve &
+    
+    # Pull a vision model
+    ollama pull llava
+
+Examples:
+    img-tag photo.jpg                       # Tag single image
+    img-tag *.jpg                           # Tag multiple images
+    img-tag ./photos/                       # Tag all images in folder
+    img-tag -r ./photos/                    # Recursive
+    img-tag -v -f csv -o tags.csv *.jpg     # CSV with progress
+    img-tag -t 30 *.jpg                     # 30 second timeout per image
+    img-tag -m llama3.2-vision photo.jpg    # Use different model
+EOF
+}
+
+# Check dependencies
+check_deps() {
+    if ! command -v ollama &> /dev/null; then
+        echo "Error: ollama is not installed" >&2
+        echo "" >&2
+        echo "Install with Homebrew:" >&2
+        echo "  brew install ollama" >&2
+        echo "" >&2
+        echo "Or download from: https://ollama.ai" >&2
+        echo "" >&2
+        echo "Then start the service and pull a model:" >&2
+        echo "  ollama serve &" >&2
+        echo "  ollama pull llava" >&2
+        exit 1
+    fi
+    
+    # Check if ollama is running
+    if ! ollama list &>/dev/null; then
+        echo "Error: ollama is not running" >&2
+        echo "" >&2
+        echo "Start it with:" >&2
+        echo "  ollama serve &" >&2
+        exit 1
+    fi
+}
+
+# Lowercase function (macOS compatible)
+to_lower() {
+    echo "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+# Check if file is an image
+is_image() {
+    local file="$1"
+    local ext="${file##*.}"
+    ext=$(to_lower "$ext")
+    
+    case "$ext" in
+        jpg|jpeg|png|gif|webp|bmp|tiff|heic)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+# Process a single image
+process_image() {
+    local image="$1"
+    local format="$2"
+    local current="$3"
+    local total="$4"
+    
+    # Verify file exists and is an image
+    if [[ ! -f "$image" ]]; then
+        echo "Warning: File not found: $image" >&2
+        return 1
+    fi
+    
+    if ! is_image "$image"; then
+        if $VERBOSE; then
+            echo "[$current/$total] Skipping non-image: $image" >&2
+        fi
+        return 1
+    fi
+    
+    if $VERBOSE; then
+        echo "[$current/$total] Processing: $(basename "$image")..." >&2
+    fi
+    
+    # Get tags from ollama with timeout
+    local prompt="Analyze this image and list what you see as comma-separated tags. Include: people (count), animals (type), objects, location/setting, activities, mood. Be concise - just tags, no sentences. Example output: 2 people, dog, beach, sunny, playing frisbee, happy"
+    
+    local result
+    local start_time=$(date +%s)
+    
+    # Use timeout command (gtimeout on macOS if installed, otherwise use built-in)
+    if command -v gtimeout &>/dev/null; then
+        result=$(gtimeout "$TIMEOUT_SECS" ollama run "$MODEL" "$prompt" "$image" 2>/dev/null)
+    elif command -v timeout &>/dev/null; then
+        result=$(timeout "$TIMEOUT_SECS" ollama run "$MODEL" "$prompt" "$image" 2>/dev/null)
+    else
+        # Fallback: run without timeout
+        result=$(ollama run "$MODEL" "$prompt" "$image" 2>/dev/null)
+    fi
+    
+    local exit_code=$?
+    local end_time=$(date +%s)
+    local duration=$((end_time - start_time))
+    
+    if [[ $exit_code -eq 124 ]]; then
+        echo "Warning: Timeout after ${TIMEOUT_SECS}s for $image" >&2
+        return 1
+    fi
+    
+    if [[ -z "$result" ]]; then
+        echo "Warning: No response for $image" >&2
+        return 1
+    fi
+    
+    if $VERBOSE; then
+        echo "[$current/$total] Done (${duration}s): $(basename "$image")" >&2
+    fi
+    
+    # Clean up result - remove newlines for CSV
+    result=$(echo "$result" | tr '\n' ' ' | sed 's/  */ /g')
+    
+    # Format output
+    case "$format" in
+        json)
+            # Escape quotes and create JSON
+            local escaped="${result//\"/\\\"}"
+            echo "{\"file\": \"$image\", \"tags\": \"$escaped\"}"
+            ;;
+        csv)
+            # Escape quotes for CSV
+            local escaped="${result//\"/\"\"}"
+            echo "\"$image\",\"$escaped\""
+            ;;
+        tags|*)
+            echo "$image:"
+            echo "  $result"
+            echo ""
+            ;;
+    esac
+}
+
+# Defaults
+OUTPUT=""
+FORMAT="tags"
+RECURSIVE=false
+VERBOSE=false
+TARGETS=()
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -m|--model)
+            MODEL="$2"
+            shift 2
+            ;;
+        -o|--output)
+            OUTPUT="$2"
+            shift 2
+            ;;
+        -f|--format)
+            FORMAT="$2"
+            shift 2
+            ;;
+        -r|--recursive)
+            RECURSIVE=true
+            shift
+            ;;
+        -t|--timeout)
+            TIMEOUT_SECS="$2"
+            shift 2
+            ;;
+        -v|--verbose)
+            VERBOSE=true
+            shift
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -*)
+            echo "Unknown option: $1" >&2
+            exit 1
+            ;;
+        *)
+            TARGETS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+if [[ ${#TARGETS[@]} -eq 0 ]]; then
+    echo "Error: Path required" >&2
+    echo "Use 'img-tag --help' for usage information" >&2
+    exit 1
+fi
+
+check_deps
+
+# Build list of all files to process
+ALL_FILES=()
+
+for TARGET in "${TARGETS[@]}"; do
+    if [[ -f "$TARGET" ]]; then
+        ALL_FILES+=("$TARGET")
+    elif [[ -d "$TARGET" ]]; then
+        if $RECURSIVE; then
+            FIND_DEPTH=""
+        else
+            FIND_DEPTH="-maxdepth 1"
+        fi
+        
+        while IFS= read -r file; do
+            ALL_FILES+=("$file")
+        done < <(find "$TARGET" $FIND_DEPTH -type f \( \
+            -iname "*.jpg" -o \
+            -iname "*.jpeg" -o \
+            -iname "*.png" -o \
+            -iname "*.gif" -o \
+            -iname "*.webp" -o \
+            -iname "*.bmp" -o \
+            -iname "*.tiff" -o \
+            -iname "*.heic" \
+        \) | sort)
+    else
+        echo "Warning: Path not found: $TARGET" >&2
+    fi
+done
+
+TOTAL=${#ALL_FILES[@]}
+
+if [[ $TOTAL -eq 0 ]]; then
+    echo "No images found" >&2
+    exit 1
+fi
+
+echo "Found $TOTAL images to process (timeout: ${TIMEOUT_SECS}s per image)" >&2
+
+# Prepare output
+output_result() {
+    if [[ -n "$OUTPUT" ]]; then
+        cat >> "$OUTPUT"
+    else
+        cat
+    fi
+}
+
+# Initialize output file with headers if needed
+if [[ -n "$OUTPUT" ]]; then
+    if [[ "$FORMAT" == "csv" ]]; then
+        echo '"file","tags"' > "$OUTPUT"
+    elif [[ "$FORMAT" == "json" ]]; then
+        echo "[" > "$OUTPUT"
+    else
+        : > "$OUTPUT"
+    fi
+fi
+
+PROCESSED=0
+SKIPPED=0
+CURRENT=0
+
+# Process all files
+for FILE in "${ALL_FILES[@]}"; do
+    ((CURRENT++))
+    
+    result=$(process_image "$FILE" "$FORMAT" "$CURRENT" "$TOTAL")
+    if [[ -n "$result" ]]; then
+        if [[ "$FORMAT" == "json" ]] && [[ $PROCESSED -gt 0 ]]; then
+            echo "," | output_result
+        fi
+        echo "$result" | output_result
+        ((PROCESSED++))
+    else
+        ((SKIPPED++))
+    fi
+done
+
+# Close JSON array if needed
+if [[ -n "$OUTPUT" ]] && [[ "$FORMAT" == "json" ]]; then
+    echo "]" >> "$OUTPUT"
+fi
+
+echo "" >&2
+echo "Done! Processed: $PROCESSED, Skipped/Failed: $SKIPPED" >&2
+if [[ -n "$OUTPUT" ]]; then
+    echo "Results saved to: $OUTPUT" >&2
+fi
