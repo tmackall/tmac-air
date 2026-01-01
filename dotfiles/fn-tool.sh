@@ -1,8 +1,9 @@
-fn-cleanup() {
+fn-tool() {
     local dry_run=0
     local recursive=0
     local lowercase=0
     local add_date=""
+    local suffix=""
     local files=()
 
     while [[ $# -gt 0 ]]; do
@@ -27,9 +28,13 @@ fn-cleanup() {
                 add_date="epoch"
                 shift
                 ;;
+            -s|--suffix)
+                suffix="$2"
+                shift 2
+                ;;
             -h|--help)
                 cat <<EOF
-Usage: fn-cleanup [options] <file|dir> [file|dir...]
+Usage: fn-tool [options] <file|dir> [file|dir...]
 
 Cleans up filenames by removing/replacing problematic characters.
 
@@ -48,15 +53,17 @@ Options:
     -l, --lowercase   Convert to lowercase
     -t, --timestamp   Add date suffix (YYYYMMDD)
     -e, --epoch       Add epoch timestamp suffix
+    -s, --suffix STR  Add custom suffix before extension
     -h, --help        Show this help
 
 Examples:
-    fn-cleanup "My File (1).pdf"
-    fn-cleanup -n *.pdf
-    fn-cleanup -r ~/Downloads
-    fn-cleanup -rl ~/Documents/Project
-    fn-cleanup -t report.pdf          # -> report-20241223.pdf
-    fn-cleanup -e screenshot.png      # -> screenshot-1703345678.png
+    fn-tool "My File (1).pdf"
+    fn-tool -n *.pdf
+    fn-tool -r ~/Downloads
+    fn-tool -rl ~/Documents/Project
+    fn-tool -t report.pdf          # -> report-20241223.pdf
+    fn-tool -e screenshot.png      # -> screenshot-1703345678.png
+    fn-tool -s "-vacation" IMG*.jpg  # -> IMG_1234-vacation.jpg
 EOF
                 return 0
                 ;;
@@ -68,7 +75,7 @@ EOF
     done
 
     if [[ ${#files[@]} -eq 0 ]]; then
-        fn-cleanup --help
+        fn-tool --help
         return 0
     fi
 
@@ -126,6 +133,16 @@ EOF
                 base_name="${base_name}-$(date +%Y%m%d)"
             fi
             new_name="${base_name}${ext}"
+        fi
+
+        # Add custom suffix if requested
+        if [[ -n "$suffix" ]]; then
+            local base_name="${new_name%.*}"
+            local ext=""
+            if [[ "$new_name" == *.* && ! -d "$file" ]]; then
+                ext=".${new_name##*.}"
+            fi
+            new_name="${base_name}${suffix}${ext}"
         fi
 
         # Skip if no change

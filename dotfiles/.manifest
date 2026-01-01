@@ -13,3 +13,5 @@ scprc:/Users/tmackall/.scprc
 ssh_config:/Users/tmackall/.ssh_config
 vimrc:/Users/tmackall/.vimrc
 bash_functions.d:/Users/tmackall/.bash_functions.d
+backup.sh:/Users/tmackall/.bash_functions.d/backup.sh
+fn-tool.sh:/Users/tmackall/.bash_functions.d/fn-tool.sh

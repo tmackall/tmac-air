@@ -54,6 +54,9 @@ fi
 if [ -d "$HOME/.local/bin" ]; then
     export PATH="$HOME/.local/bin:$PATH"
 fi
+if [ -d "$HOME/.bash_functions.d" ]; then
+    export PATH="$HOME/.bash_functions.d:$PATH"
+fi
 
 ###################
 # Aliases - General
