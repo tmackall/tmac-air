@@ -12,26 +12,18 @@ Host *
 Host bexley-l
     HostName 192.168.86.25
     User tmackall
-
-Host pi
-    HostName 192.168.1.50
-    User pi
-Host pi
-    HostName 192.168.1.50
-    User pi
-
+Host bexley-l2
+    HostName 192.168.86.50
+    User tmackall
 Host homey
     HostName 192.168.86.150
     User tmackall
-
 Host niwot-l
     HostName 192.168.86.249
     User tmackall
-
 Host niwot
     HostName lacey.malamack.us
     User tmackall
-
 Host nas
     HostName 192.168.1.200
     User admin
