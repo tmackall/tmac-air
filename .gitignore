@@ -3,9 +3,13 @@
 .CFUserTextEncoding
 .config
 .dotfiles_backup
+.claude/
+.claude.json
+.claude.json.backup.*
 .DS_Store
 .gnupg
 .lesshst
+.local/
 .npm/
 .ollama
 .pyenv
@@ -16,7 +20,9 @@
 .vnc
 .zsh_history
 .zsh_sessions
+*.bck
 *.gz
+*.heic
 /*.age
 /*.pub
 /*.zip
@@ -41,5 +47,6 @@ tt
 wg-privatekey
 wg-publickey
 wireguard-client.conf
+xfer/
 y
 yy

@@ -1,0 +1,78 @@
+h2. (warning) External Dependencies - LLM Passthrough Dashboard
+
+{panel:title=Summary|borderColor=#f90|bgColor=#fffbe6}
+The following instrumentation changes are required from the *Application Team* to enable full tenant-level monitoring and business usage metrics in the LLM Passthrough Service Observability Dashboard.
+
+*Dashboard:* [LLM Passthrough Service - Unified Observability|https://ukg.grafana.net/d/llm-passthrough-unified-observability]
+*Related Ticket:* PS-687953
+{panel}
+
+----
+
+h3. Required Metric Instrumentation
+
+||#||Action||Metric||Current State||Required Change||Effort||
+|1|Add {{product_id}} label to HTTP request counter|{{http_request_count_total}}|Label not present|Add {{product_id}} label to identify tenant on each request|Medium|
+|2|Add {{product_id}} label to latency histogram|{{request_incoming_duration_seconds_bucket}}|Label not present|Add {{product_id}} label to measure latency per tenant|Medium|
+|3|Add {{endpoint}} label to latency histogram|{{request_incoming_duration_seconds_bucket}}|Label not present|Add {{endpoint}} label to measure latency per API endpoint|Medium|
+|4|Instrument token count metric|{{llm_token_count_total}}|Metric does not exist|Create new counter metric to track token usage per request|High|
+
+----
+
+h3. Impact of Missing Instrumentation
+
+||Gap||Dashboard Panels Affected||Business Impact||
+|Missing {{product_id}} on request metrics|5xx Error Rate by Tenant, 4xx Error Rate by Tenant, Request Rate by Tenant|Cannot identify which tenants are experiencing issues or driving load|
+|Missing {{product_id}} on latency metrics|P95 Latency by Tenant|Cannot identify tenants with latency issues for targeted troubleshooting|
+|Missing {{endpoint}} on latency metrics|Latency by Endpoint (not yet created)|Cannot identify slow endpoints for optimization|
+|Missing {{llm_token_count_total}}|Total Token Count, Average Tokens per Call|Cannot track token usage or costs in Prometheus (must use Arize)|
+
+----
+
+h3. Suggested Label Format
+
+{code:title=Example Metric with product_id Label}
+http_request_count_total{
+  name="service-large-language-model",
+  namespace="ds-prod",
+  datacenter="us-east1",
+  endpoint="/api/v1/chat/completions/model/stream",
+  http_status="200",
+  product_id="tenant-abc-123"    <-- NEW LABEL
+} 1234
+{code}
+
+{code:title=Example Token Count Metric}
+llm_token_count_total{
+  name="service-large-language-model",
+  namespace="ds-prod",
+  datacenter="us-east1",
+  endpoint="/api/v1/chat/completions/model/stream",
+  product_id="tenant-abc-123",
+  token_type="input"             <-- Optional: input vs output tokens
+} 5678
+{code}
+
+----
+
+h3. Current Workaround
+
+{panel:borderColor=#ccc}
+The dashboard currently uses {{substream_id}} label for latency breakdown where available. This provides partial visibility but does not map directly to tenant identification.
+
+Panels using workaround:
+* P95 Latency by Substream ID
+* Average Latency by Substream ID
+{panel}
+
+----
+
+h3. Contact
+
+For questions about this instrumentation request, contact:
+* *Platform Team:* AIEng-FLL
+* *Dashboard Owner:* Tom Mackall
+
+----
+
+{color:#707070}_Last Updated: January 23, 2026_{color}

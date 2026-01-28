@@ -18,8 +18,8 @@ Host bexley-l2
 Host homey
     HostName 192.168.86.150
     User tmackall
-Host niwot-l
-    HostName 192.168.86.249
+Host niwot.l
+    HostName mackall-niwot.local
     User tmackall
 Host niwot
     HostName lacey.malamack.us
@@ -27,6 +27,9 @@ Host niwot
 Host nas
     HostName 192.168.1.200
     User admin
+Host streambox
+    HostName bexley-streambox.local
+    User tmackall
 
 # GitHub
 Host github.com

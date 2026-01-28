@@ -133,7 +133,7 @@ done
 # Create the zip file
 echo "Creating zip file: $ZIP_FILE"
 echo "Source directory: $SOURCE_DIR"
-if [[ ${#EXCLUDE_PATTERNS[@]:-0} -gt 0 ]]; then
+if [[ ${#EXCLUDE_PATTERNS[@]} -gt 0 ]]; then
     echo "Excluding patterns: ${EXCLUDE_PATTERNS[*]}"
 fi
 
