@@ -9,11 +9,13 @@ Host *
     ServerAliveCountMax 3
 
 # Local network hosts - update IPs as needed
-Host bexley-l
-    HostName 192.168.86.25
+Host bexley.l
+    #HostName 192.168.86.25
+    HostName mackall-bexley.local
     User tmackall
-Host bexley-l2
-    HostName 192.168.86.50
+Host bexley.l2
+    #HostName 192.168.86.50
+    HostName mackall-bexley2.local
     User tmackall
 Host homey
     HostName 192.168.86.150
