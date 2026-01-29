@@ -53,3 +53,4 @@ y
 yy
 private/
 dashboards/
+.terraform.d/
