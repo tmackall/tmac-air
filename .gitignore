@@ -29,7 +29,8 @@
 /bin/*zip
 /bitwarden
 /Desktop/Screen*
-/keyboard
+/keyboard/*.json
+/keyboard/*.json_
 /technical
 Applications/
 Desktop/Screenshot*
