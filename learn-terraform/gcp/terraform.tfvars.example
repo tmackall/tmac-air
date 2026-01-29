@@ -1,0 +1,4 @@
+# GCP Project Configuration
+project_id  = "quickstart-1555248861915"
+region      = "us-central1"
+environment = "dev"
