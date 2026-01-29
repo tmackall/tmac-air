@@ -56,12 +56,12 @@ variable "config_options" {
 
 locals {
   # Combine variables into useful values
-  full_name   = "${var.app_name}-${var.environment}"
-  output_dir  = "${path.module}/output"
+  full_name  = "${var.app_name}-${var.environment}"
+  output_dir = "${path.module}/output"
 
   # Conditional logic
-  is_prod     = var.environment == "prod"
-  log_level   = local.is_prod ? "warn" : var.config_options.log_level
+  is_prod   = var.environment == "prod"
+  log_level = local.is_prod ? "warn" : var.config_options.log_level
 }
 
 # ============================================
@@ -130,7 +130,7 @@ resource "local_file" "env_file" {
     DEBUG=${var.config_options.debug_mode}
   EOT
 
-  file_permission = "0600"  # Restrictive since it has secrets
+  file_permission = "0600" # Restrictive since it has secrets
 }
 
 # ============================================

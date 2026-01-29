@@ -72,7 +72,7 @@ resource "random_id" "bucket_suffix" {
 resource "google_storage_bucket" "demo" {
   name          = "${local.bucket_prefix}-${random_id.bucket_suffix.hex}"
   location      = var.region
-  force_destroy = true  # Allow deletion even if not empty (for learning)
+  force_destroy = true # Allow deletion even if not empty (for learning)
 
   # Use Standard storage class (free tier eligible)
   storage_class = "STANDARD"
@@ -85,7 +85,7 @@ resource "google_storage_bucket" "demo" {
   # Lifecycle rule: delete old versions after 30 days
   lifecycle_rule {
     condition {
-      age = 30
+      age        = 30
       with_state = "ARCHIVED"
     }
     action {
