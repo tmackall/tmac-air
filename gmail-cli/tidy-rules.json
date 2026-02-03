@@ -1,0 +1,20 @@
+{
+  "rules": [
+    {
+      "label": "Job Seekers",
+      "from": ["linkedin", "dice.com", "dennis gorelik", "indeed.com", "jobs2careers", "glassdoor"]
+    },
+    {
+      "label": "Chase",
+      "from": ["chase.com"]
+    },
+    {
+      "label": "Personal Finance",
+      "from": ["rocketmoney", "mint", "nerdwallet"]
+    },
+    {
+      "label": "Purdue Sports",
+      "from": ["on3.com"]
+    }
+  ]
+}

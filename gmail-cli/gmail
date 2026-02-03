@@ -1,0 +1,202 @@
+#!/bin/bash
+#
+# Gmail CLI Wrapper
+# Common cleanup commands for gmail_cleanup.py
+#
+
+# Resolve symlinks to find the actual script location
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+PYTHON_SCRIPT="$SCRIPT_DIR/gmail_cleanup.py"
+
+# Colors for output
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'
+NC=$'\033[0m' # No Color
+
+usage() {
+    cat << USAGE_EOF
+${GREEN}Gmail CLI Wrapper${NC}
+
+${YELLOW}Usage:${NC} gmail <command> [options]
+
+${YELLOW}Commands:${NC}
+  ${BLUE}promotions${NC} [age]      Clean promotional emails (default: 6m)
+  ${BLUE}social${NC} [age]          Clean social notifications (default: 6m)
+  ${BLUE}updates${NC} [age]         Clean update emails (default: 6m)
+  ${BLUE}large${NC} [size] [age]    Find large emails (default: 5M, 1y)
+  ${BLUE}from${NC} <sender>         Clean emails from specific sender
+  ${BLUE}domain${NC} <domain>       Clean emails from entire domain
+  ${BLUE}file${NC} <sender> <label> Label inbox emails from sender and archive
+  ${BLUE}tidy${NC}                  Run all filing rules from tidy-rules.json
+  ${BLUE}unread${NC} [age]          Clean old unread emails (default: 1y)
+  ${BLUE}search${NC} <query>        Run custom Gmail search query
+  ${BLUE}help${NC}                  Show this help message
+
+${YELLOW}Options:${NC}
+  --trash, -t          Move to trash (default, recoverable)
+  --delete, -d         Permanently delete
+  --dry-run, -n        Preview only, don't delete
+  --yes, -y            Skip confirmation prompt
+  --max <num>          Maximum messages to process (default: 500)
+
+${YELLOW}Examples:${NC}
+  gmail promotions                  # Trash promotions older than 6 months
+  gmail promotions 1y               # Trash promotions older than 1 year
+  gmail promotions --dry-run        # Preview only
+  gmail large 10M 6m                # Find emails larger than 10M, older than 6 months
+  gmail from newsletter@spam.com    # Clean emails from specific sender
+  gmail domain @marketing.com       # Clean all emails from domain
+  gmail file chase Chase            # Label Chase emails and archive from inbox
+  gmail tidy                        # Run all filing rules to organize inbox
+  gmail tidy --dry-run              # Preview what tidy would do
+USAGE_EOF
+}
+
+# Parse global options and extract them from args
+parse_options() {
+    ACTION="--trash"
+    EXTRA_OPTS=()
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --trash|-t)
+                ACTION="--trash"
+                shift
+                ;;
+            --delete|-d)
+                ACTION="--delete"
+                shift
+                ;;
+            --dry-run|-n)
+                ACTION="--dry-run"
+                shift
+                ;;
+            --yes|-y)
+                EXTRA_OPTS+=("--no-confirm")
+                shift
+                ;;
+            --max)
+                EXTRA_OPTS+=("--max" "$2")
+                shift 2
+                ;;
+            *)
+                REMAINING_ARGS+=("$1")
+                shift
+                ;;
+        esac
+    done
+}
+
+run_query() {
+    local query="$1"
+    python3 "$PYTHON_SCRIPT" --query "$query" $ACTION "${EXTRA_OPTS[@]}"
+}
+
+run_label_query() {
+    local query="$1"
+    local label="$2"
+    local dry_run_flag=""
+    [[ "$ACTION" == "--dry-run" ]] && dry_run_flag="--dry-run"
+    python3 "$PYTHON_SCRIPT" --query "$query" --label "$label" $dry_run_flag "${EXTRA_OPTS[@]}"
+}
+
+run_tidy() {
+    local dry_run_flag=""
+    [[ "$ACTION" == "--dry-run" ]] && dry_run_flag="--dry-run"
+    python3 "$PYTHON_SCRIPT" --tidy $dry_run_flag "${EXTRA_OPTS[@]}"
+}
+
+# Main command handling
+if [[ $# -eq 0 ]]; then
+    usage
+    exit 0
+fi
+
+COMMAND="$1"
+shift
+
+REMAINING_ARGS=()
+parse_options "$@"
+set -- "${REMAINING_ARGS[@]}"
+
+case "$COMMAND" in
+    promotions)
+        AGE="${1:-6m}"
+        run_query "category:promotions older_than:$AGE"
+        ;;
+    social)
+        AGE="${1:-6m}"
+        run_query "category:social older_than:$AGE"
+        ;;
+    updates)
+        AGE="${1:-6m}"
+        run_query "category:updates older_than:$AGE"
+        ;;
+    large)
+        SIZE="${1:-5M}"
+        AGE="${2:-1y}"
+        run_query "larger:$SIZE older_than:$AGE"
+        ;;
+    from)
+        if [[ -z "$1" ]]; then
+            echo -e "${RED}Error:${NC} 'from' command requires a sender email"
+            echo "Usage: gmail from sender@example.com"
+            exit 1
+        fi
+        run_query "from:$1"
+        ;;
+    domain)
+        DOMAIN="$1"
+        if [[ -z "$DOMAIN" ]]; then
+            echo -e "${RED}Error:${NC} 'domain' command requires a domain"
+            echo "Usage: gmail domain example.com"
+            exit 1
+        fi
+        # Remove @ prefix if provided
+        DOMAIN="${DOMAIN#@}"
+        run_query "from:@$DOMAIN"
+        ;;
+    file)
+        SENDER="$1"
+        LABEL="$2"
+        if [[ -z "$SENDER" ]] || [[ -z "$LABEL" ]]; then
+            echo -e "${RED}Error:${NC} 'file' command requires sender and label"
+            echo "Usage: gmail file <sender> <label>"
+            echo "Example: gmail file chase Chase"
+            exit 1
+        fi
+        run_label_query "in:inbox from:$SENDER" "$LABEL"
+        ;;
+    tidy)
+        run_tidy
+        ;;
+    unread)
+        AGE="${1:-1y}"
+        run_query "is:unread older_than:$AGE"
+        ;;
+    search)
+        if [[ -z "$1" ]]; then
+            echo -e "${RED}Error:${NC} 'search' command requires a query"
+            echo "Usage: gmail search \"your gmail query\""
+            exit 1
+        fi
+        run_query "$1"
+        ;;
+    help|--help|-h)
+        usage
+        exit 0
+        ;;
+    *)
+        echo -e "${RED}Error:${NC} Unknown command '$COMMAND'"
+        echo "Run 'gmail help' for usage information."
+        exit 1
+        ;;
+esac
