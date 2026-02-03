@@ -14,7 +14,7 @@ EXCLUDE_PATTERNS=()
 SOURCE_DIR=""
 
 # Always exclude these patterns
-DEFAULT_EXCLUDES=(".git")
+DEFAULT_EXCLUDES=(".git" "node_modules")
 
 # Function to display usage
 usage() {
@@ -45,7 +45,7 @@ Notes:
     - Patterns can match files or directories
     - The script automatically handles the current directory (.) correctly
     - Source directory can be specified before or after options
-    - .git directories are always excluded by default
+    - .git and node_modules directories are always excluded by default
 
 The script will create a uniquely named zip file with a timestamp:
     <basename>_YYYYMMDD_HHMMSS.zip
