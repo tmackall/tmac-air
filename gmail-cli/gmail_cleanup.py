@@ -192,6 +192,16 @@ def get_or_create_label(service, label_name):
         print(f"Created new label: {label_name}")
         return created['id']
     except HttpError as e:
+        # Handle 409 conflict - label exists but wasn't matched (case/normalization differences)
+        if e.resp.status == 409:
+            try:
+                results = service.users().labels().list(userId='me').execute()
+                labels = results.get('labels', [])
+                for label in labels:
+                    if label['name'].lower() == label_name.lower():
+                        return label['id']
+            except HttpError:
+                pass
         print(f"Error getting/creating label: {e}")
         return None
 
