@@ -35,6 +35,7 @@ ${YELLOW}Commands:${NC}
   ${BLUE}from${NC} <sender>         Clean emails from specific sender
   ${BLUE}domain${NC} <domain>       Clean emails from entire domain
   ${BLUE}file${NC} <sender> <label> Label inbox emails from sender and archive
+  ${BLUE}label${NC} <label> <query>  Label emails matching query and archive
   ${BLUE}tidy${NC}                  Run all filing rules from tidy-rules.json
   ${BLUE}unread${NC} [age]          Clean old unread emails (default: 1y)
   ${BLUE}search${NC} <query>        Run custom Gmail search query
@@ -55,6 +56,8 @@ ${YELLOW}Examples:${NC}
   gmail from newsletter@spam.com    # Clean emails from specific sender
   gmail domain @marketing.com       # Clean all emails from domain
   gmail file chase Chase            # Label Chase emails and archive from inbox
+  gmail label Bills "from:utilities@example.com"   # Label matching emails and archive
+  gmail label Receipts "subject:order confirmation" # Label by subject content
   gmail tidy                        # Run all filing rules to organize inbox
   gmail tidy --dry-run              # Preview what tidy would do
 USAGE_EOF
@@ -174,6 +177,20 @@ case "$COMMAND" in
             exit 1
         fi
         run_label_query "in:inbox from:$SENDER" "$LABEL"
+        ;;
+    label)
+        LABEL="$1"
+        QUERY="$2"
+        if [[ -z "$LABEL" ]] || [[ -z "$QUERY" ]]; then
+            echo -e "${RED}Error:${NC} 'label' command requires a label name and a query"
+            echo "Usage: gmail label <label> <query>"
+            echo "Examples:"
+            echo "  gmail label Bills \"from:utilities@example.com\""
+            echo "  gmail label Receipts \"subject:order confirmation\""
+            echo "  gmail label Work \"from:boss@company.com subject:project\""
+            exit 1
+        fi
+        run_label_query "$QUERY" "$LABEL"
         ;;
     tidy)
         run_tidy

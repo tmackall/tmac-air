@@ -38,8 +38,11 @@ def get_gmail_service():
     
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
+            try:
+                creds.refresh(Request())
+            except Exception:
+                creds = None
+        if not creds or not creds.valid:
             if not os.path.exists(CREDENTIALS_FILE):
                 print(f"Error: {CREDENTIALS_FILE} not found.")
                 print("Download OAuth credentials from Google Cloud Console.")
