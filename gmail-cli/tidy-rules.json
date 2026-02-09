@@ -1,7 +1,7 @@
 {
   "rules": [
     {
-      "label": "Job Seekers",
+      "label": "job search",
       "from": ["linkedin", "dice.com", "dennis gorelik", "indeed.com", "jobs2careers", "glassdoor"]
     },
     {
