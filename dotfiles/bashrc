@@ -330,3 +330,4 @@ _claude_conv_completions() {
 
 complete -F _claude_conv_completions claude-conv
 eval "$(pyenv init -)"
+export PATH="$HOME/.local/bin:$PATH"

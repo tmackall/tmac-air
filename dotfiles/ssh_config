@@ -32,6 +32,13 @@ Host nas
 Host streambox
     HostName bexley-streambox.local
     User tmackall
+Host sb
+    HostName bexley-streambox.local
+    User tmackall
+Host tmac-air
+    HostName 192.168.86.57
+    User tmackall
+    ProxyJump streambox
 
 # GitHub
 Host github.com
