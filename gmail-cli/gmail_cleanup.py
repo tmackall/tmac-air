@@ -263,13 +263,17 @@ def run_tidy_rules(service, dry_run=False, no_confirm=False, max_results=500):
     for rule in rules:
         label = rule.get('label')
         from_patterns = rule.get('from', [])
+        raw_query = rule.get('query')
 
-        if not label or not from_patterns:
+        if not label or (not from_patterns and not raw_query):
             continue
 
-        # Build query: in:inbox AND {from:pattern1 from:pattern2 ...}
-        from_clauses = ' '.join([f'from:{p}' for p in from_patterns])
-        query = f'in:inbox {{{from_clauses}}}'
+        # Build query from 'from' patterns or use raw 'query'
+        if raw_query:
+            query = f'in:inbox {raw_query}'
+        else:
+            from_clauses = ' '.join([f'from:{p}' for p in from_patterns])
+            query = f'in:inbox {{{from_clauses}}}'
 
         print(f"\n{'='*60}")
         print(f"Rule: {label}")

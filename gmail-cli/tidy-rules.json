@@ -14,7 +14,27 @@
     },
     {
       "label": "NMF lawsuit",
-      "from": ["van horn engineering"]
+      "query": "from:\"Van Horn Engineering & Surveying\""
+    },
+    {
+      "label": "Bills",
+      "from": [
+        "xcelenergy",
+        "alerts.comcast.net",
+        "notifications.usbank.com",
+        "centerpointenergy.com",
+        "amwater.com",
+        "dukeenergy",
+        "publicstorage",
+        "customercenter.net",
+        "payments.canvas.org",
+        "getipass.com",
+        "etradefrommorganstanley",
+        "googlepay-noreply@google.com",
+        "payments-noreply@google.com",
+        "iuhealth",
+        "firstfederalbanking.com"
+      ]
     },
     {
       "label": "Purdue/Sports",
