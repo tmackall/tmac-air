@@ -331,3 +331,6 @@ _claude_conv_completions() {
 complete -F _claude_conv_completions claude-conv
 eval "$(pyenv init -)"
 export PATH="$HOME/.local/bin:$PATH"
+
+# Startup message
+echo "dotfiles loaded — $(date '+%a %b %d %H:%M') | bash ${BASH_VERSION%%(*} | $(uname -n)"
