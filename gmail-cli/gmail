@@ -38,6 +38,8 @@ ${YELLOW}Commands:${NC}
   ${BLUE}label${NC} <label> <query>  Label emails matching query and archive
   ${BLUE}tidy${NC}                  Run all filing rules from tidy-rules.json
   ${BLUE}download${NC} <query>      Download attachments from matching emails
+  ${BLUE}labels${NC}                List all Gmail labels
+  ${BLUE}get-label${NC} <label>     View messages under a label
   ${BLUE}unread${NC} [age]          Clean old unread emails (default: 1y)
   ${BLUE}search${NC} <query>        Run custom Gmail search query
   ${BLUE}help${NC}                  Show this help message
@@ -65,6 +67,9 @@ ${YELLOW}Examples:${NC}
   gmail download "has:attachment newer_than:7d"          # Download recent attachments
   gmail download "from:boss@work.com" --output ~/files   # Download to specific dir
   gmail download "has:attachment" --dry-run               # Preview attachments
+  gmail labels                          # List all Gmail labels
+  gmail get-label promotions            # View messages under a label
+  gmail get-label INBOX --max 5         # View 5 most recent inbox messages
 USAGE_EOF
 }
 
@@ -119,6 +124,17 @@ run_label_query() {
     local dry_run_flag=""
     [[ "$ACTION" == "--dry-run" ]] && dry_run_flag="--dry-run"
     python3 "$PYTHON_SCRIPT" --query "$query" --label "$label" $dry_run_flag "${EXTRA_OPTS[@]}"
+}
+
+run_labels() {
+    python3 "$PYTHON_SCRIPT" --labels
+}
+
+run_get_label() {
+    local label="$1"
+    local preview_flag=""
+    # Check EXTRA_OPTS for --max; if present, use same value for --preview
+    python3 "$PYTHON_SCRIPT" --get-label "$label" "${EXTRA_OPTS[@]}"
 }
 
 run_tidy() {
@@ -226,6 +242,20 @@ case "$COMMAND" in
         ;;
     tidy)
         run_tidy
+        ;;
+    labels)
+        run_labels
+        ;;
+    get-label)
+        if [[ -z "$1" ]]; then
+            echo -e "${RED}Error:${NC} 'get-label' command requires a label name"
+            echo "Usage: gmail get-label <label>"
+            echo "Examples:"
+            echo "  gmail get-label promotions"
+            echo "  gmail get-label INBOX --max 5"
+            exit 1
+        fi
+        run_get_label "$1"
         ;;
     unread)
         AGE="${1:-1y}"

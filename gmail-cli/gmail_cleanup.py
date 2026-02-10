@@ -211,6 +211,88 @@ def get_or_create_label(service, label_name):
         return None
 
 
+def list_labels(service):
+    """List all Gmail labels with message counts."""
+    try:
+        results = service.users().labels().list(userId='me').execute()
+        labels = results.get('labels', [])
+    except HttpError as e:
+        print(f"Error listing labels: {e}")
+        return
+
+    if not labels:
+        print("No labels found.")
+        return
+
+    # Fetch full details for each label to get message counts
+    detailed = []
+    for label in labels:
+        try:
+            info = service.users().labels().get(userId='me', id=label['id']).execute()
+            detailed.append(info)
+        except HttpError:
+            detailed.append(label)
+
+    detailed.sort(key=lambda l: l['name'].lower())
+
+    print(f"\n{'Label':<40} {'Total':>8} {'Unread':>8}")
+    print("-" * 58)
+    for label in detailed:
+        name = label['name']
+        total = label.get('messagesTotal', '-')
+        unread = label.get('messagesUnread', '-')
+        print(f"{name:<40} {str(total):>8} {str(unread):>8}")
+    print(f"\n{len(detailed)} labels total.")
+
+
+def get_messages_by_label(service, label_name, max_results=500):
+    """Fetch messages with a given label name."""
+    # Resolve label name to ID
+    try:
+        results = service.users().labels().list(userId='me').execute()
+        labels = results.get('labels', [])
+    except HttpError as e:
+        print(f"Error listing labels: {e}")
+        return None
+
+    label_id = None
+    for label in labels:
+        if label['name'].lower() == label_name.lower():
+            label_id = label['id']
+            break
+
+    if not label_id:
+        print(f"Error: Label '{label_name}' not found.")
+        print("Use --labels to see available labels.")
+        return None
+
+    print(f"Fetching messages with label: {label_name}")
+
+    messages = []
+    page_token = None
+
+    while True:
+        results = service.users().messages().list(
+            userId='me',
+            labelIds=[label_id],
+            maxResults=min(max_results - len(messages), 500),
+            pageToken=page_token
+        ).execute()
+
+        if 'messages' in results:
+            messages.extend(results['messages'])
+            print(f"  Found {len(messages)} messages so far...")
+
+        if len(messages) >= max_results:
+            break
+
+        page_token = results.get('nextPageToken')
+        if not page_token:
+            break
+
+    return messages
+
+
 def label_and_archive_messages(service, messages, label_name, batch_size=100):
     """Apply label and remove from inbox (archive) in batches."""
     total = len(messages)
@@ -462,6 +544,9 @@ Examples:
   %(prog)s --query "older_than:1y label:promotions" --delete
   %(prog)s --query "from:newsletter@site.com" --trash
   %(prog)s --query "subject:unsubscribe older_than:6m" --delete --no-confirm
+  %(prog)s --labels
+  %(prog)s --get-label "promotions"
+  %(prog)s --get-label "INBOX" --max 5 --preview 5
 
 Gmail search operators:
   from:sender@email.com      Messages from specific sender
@@ -478,6 +563,8 @@ Gmail search operators:
     
     parser.add_argument('--query', '-q', help='Gmail search query')
     parser.add_argument('--tidy', action='store_true', help='Run all tidy rules from tidy-rules.json')
+    parser.add_argument('--labels', action='store_true', help='List all Gmail labels')
+    parser.add_argument('--get-label', metavar='LABEL', help='View messages under a label')
     parser.add_argument('--dry-run', '-n', action='store_true', help='Preview only, no deletion')
     parser.add_argument('--delete', '-d', action='store_true', help='Permanently delete messages')
     parser.add_argument('--trash', '-t', action='store_true', help='Move messages to trash (recoverable)')
@@ -490,7 +577,7 @@ Gmail search operators:
     
     args = parser.parse_args()
 
-    # Handle tidy mode separately
+    # Handle standalone commands (no --query required)
     if args.tidy:
         try:
             service = get_gmail_service()
@@ -503,8 +590,38 @@ Gmail search operators:
             sys.exit(1)
         sys.exit(0)
 
+    if args.labels:
+        try:
+            service = get_gmail_service()
+            list_labels(service)
+        except HttpError as e:
+            print(f"Gmail API error: {e}")
+            sys.exit(1)
+        except KeyboardInterrupt:
+            print("\nCancelled.")
+            sys.exit(1)
+        sys.exit(0)
+
+    if args.get_label:
+        try:
+            service = get_gmail_service()
+            messages = get_messages_by_label(service, args.get_label, args.max)
+            if not messages:
+                if messages is not None:
+                    print(f"\nNo messages found under label '{args.get_label}'.")
+                sys.exit(0)
+            preview_messages(service, messages, args.preview)
+            print(f"\n{len(messages)} messages total under '{args.get_label}'.")
+        except HttpError as e:
+            print(f"Gmail API error: {e}")
+            sys.exit(1)
+        except KeyboardInterrupt:
+            print("\nCancelled.")
+            sys.exit(1)
+        sys.exit(0)
+
     if not args.query:
-        print("Error: --query is required (or use --tidy)")
+        print("Error: --query is required (or use --tidy, --labels, --get-label)")
         sys.exit(1)
 
     if not args.dry_run and not args.delete and not args.trash and not args.label and not args.download:
