@@ -10,8 +10,10 @@ Usage:
 """
 
 import argparse
+import base64
 import json
 import os
+import re
 import sys
 from datetime import datetime
 
@@ -307,6 +309,149 @@ def run_tidy_rules(service, dry_run=False, no_confirm=False, max_results=500):
     print('='*60)
 
 
+def sanitize_filename(filename):
+    """Replace unsafe characters in filenames with underscores."""
+    return re.sub(r'[/\\:*?"<>|]', '_', filename)
+
+
+def get_unique_path(directory, filename):
+    """Return a path in directory for filename, appending _1, _2 etc. to avoid overwrites."""
+    path = os.path.join(directory, filename)
+    if not os.path.exists(path):
+        return path
+    name, ext = os.path.splitext(filename)
+    counter = 1
+    while True:
+        new_path = os.path.join(directory, f"{name}_{counter}{ext}")
+        if not os.path.exists(new_path):
+            return new_path
+        counter += 1
+
+
+def format_size(size_bytes):
+    """Format bytes as human-readable string."""
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    else:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+
+
+def get_message_attachments(service, message_id):
+    """Fetch message and return list of attachment dicts from all MIME parts."""
+    try:
+        msg = service.users().messages().get(
+            userId='me', id=message_id, format='full'
+        ).execute()
+    except HttpError as e:
+        print(f"  Error fetching message {message_id}: {e}")
+        return []
+
+    headers = {h['name']: h['value'] for h in msg.get('payload', {}).get('headers', [])}
+    msg_meta = {
+        'subject': headers.get('Subject', '(no subject)')[:60],
+        'from': headers.get('From', '(unknown)')[:40],
+        'date': headers.get('Date', '(unknown date)')[:25],
+    }
+
+    attachments = []
+
+    def walk_parts(parts):
+        for part in parts:
+            filename = part.get('filename')
+            body = part.get('body', {})
+            if filename:
+                att = {
+                    'filename': sanitize_filename(filename),
+                    'size': body.get('size', 0),
+                    'attachment_id': body.get('attachmentId'),
+                    'data': body.get('data'),
+                    'message_id': message_id,
+                    'meta': msg_meta,
+                }
+                attachments.append(att)
+            if 'parts' in part:
+                walk_parts(part['parts'])
+
+    payload = msg.get('payload', {})
+    if 'parts' in payload:
+        walk_parts(payload['parts'])
+    elif payload.get('filename'):
+        body = payload.get('body', {})
+        attachments.append({
+            'filename': sanitize_filename(payload['filename']),
+            'size': body.get('size', 0),
+            'attachment_id': body.get('attachmentId'),
+            'data': body.get('data'),
+            'message_id': message_id,
+            'meta': msg_meta,
+        })
+
+    return attachments
+
+
+def download_attachments(service, messages, output_dir, dry_run=False):
+    """Scan messages for attachments and download them."""
+    total_messages = len(messages)
+    all_attachments = []
+
+    print(f"\nScanning {total_messages} messages for attachments...")
+
+    for i, msg in enumerate(messages):
+        atts = get_message_attachments(service, msg['id'])
+        all_attachments.extend(atts)
+        if (i + 1) % 25 == 0:
+            print(f"  Scanned {i + 1}/{total_messages} messages, found {len(all_attachments)} attachments...")
+
+    if not all_attachments:
+        print("\nNo attachments found.")
+        return 0
+
+    total_size = sum(a['size'] for a in all_attachments)
+    print(f"\nFound {len(all_attachments)} attachments ({format_size(total_size)}) across {total_messages} messages.")
+
+    if dry_run:
+        print(f"\n[DRY RUN] Would download {len(all_attachments)} attachments to {output_dir}")
+        for att in all_attachments[:20]:
+            print(f"  {att['filename']} ({format_size(att['size'])}) — from: {att['meta']['from']}")
+        if len(all_attachments) > 20:
+            print(f"  ... and {len(all_attachments) - 20} more")
+        return 0
+
+    os.makedirs(output_dir, exist_ok=True)
+    downloaded = 0
+
+    print(f"\nDownloading to {output_dir}...")
+
+    for i, att in enumerate(all_attachments):
+        try:
+            if att['attachment_id']:
+                result = service.users().messages().attachments().get(
+                    userId='me', messageId=att['message_id'], id=att['attachment_id']
+                ).execute()
+                file_data = base64.urlsafe_b64decode(result['data'])
+            elif att['data']:
+                file_data = base64.urlsafe_b64decode(att['data'])
+            else:
+                print(f"  Skipping {att['filename']}: no data available")
+                continue
+
+            path = get_unique_path(output_dir, att['filename'])
+            with open(path, 'wb') as f:
+                f.write(file_data)
+            downloaded += 1
+
+            if downloaded % 10 == 0:
+                print(f"  Downloaded {downloaded}/{len(all_attachments)} attachments...")
+
+        except Exception as e:
+            print(f"  Error downloading {att['filename']}: {e}")
+
+    print(f"\nDone! Downloaded {downloaded} attachments to {output_dir}")
+    return downloaded
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Filter and delete Gmail messages from the command line.',
@@ -337,6 +482,8 @@ Gmail search operators:
     parser.add_argument('--delete', '-d', action='store_true', help='Permanently delete messages')
     parser.add_argument('--trash', '-t', action='store_true', help='Move messages to trash (recoverable)')
     parser.add_argument('--label', '-l', metavar='LABEL', help='Apply label and archive (remove from inbox)')
+    parser.add_argument('--download', action='store_true', help='Download attachments from matching messages')
+    parser.add_argument('--output', '-o', default='./gmail-downloads', help='Output directory for downloads (default: ./gmail-downloads)')
     parser.add_argument('--no-confirm', '-y', action='store_true', help='Skip confirmation prompt')
     parser.add_argument('--max', '-m', type=int, default=500, help='Maximum messages to process (default: 500)')
     parser.add_argument('--preview', '-p', type=int, default=10, help='Number of messages to preview (default: 10)')
@@ -360,13 +507,13 @@ Gmail search operators:
         print("Error: --query is required (or use --tidy)")
         sys.exit(1)
 
-    if not args.dry_run and not args.delete and not args.trash and not args.label:
-        print("Error: Specify --dry-run, --delete, --trash, or --label <name>")
+    if not args.dry_run and not args.delete and not args.trash and not args.label and not args.download:
+        print("Error: Specify --dry-run, --delete, --trash, --label <name>, or --download")
         sys.exit(1)
 
-    action_count = sum([args.delete, args.trash, bool(args.label)])
+    action_count = sum([args.delete, args.trash, bool(args.label), args.download])
     if action_count > 1:
-        print("Error: Cannot use multiple actions (--delete, --trash, --label)")
+        print("Error: Cannot use multiple actions (--delete, --trash, --label, --download)")
         sys.exit(1)
     
     try:
@@ -376,9 +523,13 @@ Gmail search operators:
         if not messages:
             print("\nNo messages found matching your query.")
             sys.exit(0)
-        
+
+        if args.download:
+            download_attachments(service, messages, args.output, args.dry_run)
+            sys.exit(0)
+
         preview_messages(service, messages, args.preview)
-        
+
         if args.dry_run:
             print(f"\n[DRY RUN] Would affect {len(messages)} messages.")
             print("Run with --delete, --trash, or --label to actually process them.")

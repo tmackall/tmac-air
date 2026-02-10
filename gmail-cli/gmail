@@ -37,6 +37,7 @@ ${YELLOW}Commands:${NC}
   ${BLUE}file${NC} <sender> <label> Label inbox emails from sender and archive
   ${BLUE}label${NC} <label> <query>  Label emails matching query and archive
   ${BLUE}tidy${NC}                  Run all filing rules from tidy-rules.json
+  ${BLUE}download${NC} <query>      Download attachments from matching emails
   ${BLUE}unread${NC} [age]          Clean old unread emails (default: 1y)
   ${BLUE}search${NC} <query>        Run custom Gmail search query
   ${BLUE}help${NC}                  Show this help message
@@ -47,6 +48,7 @@ ${YELLOW}Options:${NC}
   --dry-run, -n        Preview only, don't delete
   --yes, -y            Skip confirmation prompt
   --max <num>          Maximum messages to process (default: 500)
+  --output, -o <dir>   Output directory for downloads (default: ./gmail-downloads)
 
 ${YELLOW}Examples:${NC}
   gmail promotions                  # Trash promotions older than 6 months
@@ -60,6 +62,9 @@ ${YELLOW}Examples:${NC}
   gmail label Receipts "subject:order confirmation" # Label by subject content
   gmail tidy                        # Run all filing rules to organize inbox
   gmail tidy --dry-run              # Preview what tidy would do
+  gmail download "has:attachment newer_than:7d"          # Download recent attachments
+  gmail download "from:boss@work.com" --output ~/files   # Download to specific dir
+  gmail download "has:attachment" --dry-run               # Preview attachments
 USAGE_EOF
 }
 
@@ -67,6 +72,7 @@ USAGE_EOF
 parse_options() {
     ACTION="--trash"
     EXTRA_OPTS=()
+    OUTPUT_DIR=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -88,6 +94,10 @@ parse_options() {
                 ;;
             --max)
                 EXTRA_OPTS+=("--max" "$2")
+                shift 2
+                ;;
+            --output|-o)
+                OUTPUT_DIR="$2"
                 shift 2
                 ;;
             *)
@@ -115,6 +125,16 @@ run_tidy() {
     local dry_run_flag=""
     [[ "$ACTION" == "--dry-run" ]] && dry_run_flag="--dry-run"
     python3 "$PYTHON_SCRIPT" --tidy $dry_run_flag "${EXTRA_OPTS[@]}"
+}
+
+run_download() {
+    local query="$1"
+    local output_dir="$2"
+    local dry_run_flag=""
+    [[ "$ACTION" == "--dry-run" ]] && dry_run_flag="--dry-run"
+    local output_flag=""
+    [[ -n "$output_dir" ]] && output_flag="--output $output_dir"
+    python3 "$PYTHON_SCRIPT" --query "$query" --download $dry_run_flag $output_flag "${EXTRA_OPTS[@]}"
 }
 
 # Main command handling
@@ -191,6 +211,18 @@ case "$COMMAND" in
             exit 1
         fi
         run_label_query "$QUERY" "$LABEL"
+        ;;
+    download)
+        if [[ -z "$1" ]]; then
+            echo -e "${RED}Error:${NC} 'download' command requires a search query"
+            echo "Usage: gmail download <query> [--output <dir>]"
+            echo "Examples:"
+            echo "  gmail download \"has:attachment newer_than:7d\""
+            echo "  gmail download \"from:someone@example.com\" --output ~/files"
+            echo "  gmail download \"has:attachment\" --dry-run"
+            exit 1
+        fi
+        run_download "$1" "$OUTPUT_DIR"
         ;;
     tidy)
         run_tidy
