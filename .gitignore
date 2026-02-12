@@ -34,15 +34,11 @@ __pycache__/
 /*.zip
 /bin/*zip
 /bitwarden
-/Desktop/Screen*
-/Desktop/scr-*
 /Screenshots/
-/Desktop/rec-*
 /keyboard/*.json
 /keyboard/*.json_
 /technical
 Applications/
-Desktop/Screenshot*
 Documents
 Downloads
 Library
@@ -63,4 +59,3 @@ yy
 private/
 dashboards/
 .terraform.d/
-Screenshot*
