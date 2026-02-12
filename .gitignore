@@ -23,6 +23,12 @@
 *.bck
 *.gz
 *.heic
+/*.pdf
+/*.png
+__pycache__/
+/tmp/
+/ds-test-ds-system/
+/epicAlertMonitoring/
 /*.age
 /*.pub
 /*.zip
