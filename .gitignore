@@ -35,6 +35,7 @@ __pycache__/
 /bin/*zip
 /bitwarden
 /Desktop/Screen*
+/Desktop/scr-*
 /keyboard/*.json
 /keyboard/*.json_
 /technical
