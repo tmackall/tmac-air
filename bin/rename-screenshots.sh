@@ -4,7 +4,7 @@
 #   "Screen Recording 2026-02-12 at 02.29.24.mov" -> "rec-20260212-022924.mov"
 # Triggered by launchd when ~/Desktop changes.
 
-DIR="$HOME/Desktop"
+DIR="/Users/tmackall/Screenshots"
 
 for f in "$DIR"/Screenshot\ *.png; do
   [ -f "$f" ] || continue
