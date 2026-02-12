@@ -26,8 +26,18 @@ parse_git_branch() {
     git branch 2>/dev/null | sed -n 's/^\* \(.*\)/ (\1)/p'
 }
 
-# Colorful prompt with git branch
-export PS1='\[\033[0;34m\]\u@\h:\w$(parse_git_branch)\[\033[00m\]\$ '
+# Dynamic prompt color based on terminal background
+_set_prompt() {
+  local bg="${COLORFGBG##*;}"
+  local color
+  if [[ "$bg" -gt 8 ]] 2>/dev/null; then
+    color="\[\033[0;34m\]"  # dark blue for light backgrounds
+  else
+    color="\[\033[01;32m\]" # bold green for dark backgrounds
+  fi
+  PS1="${color}\u@\h:\w$(parse_git_branch)\[\033[00m\]\$ "
+}
+PROMPT_COMMAND="_set_prompt"
 
 ###################
 # Environment
