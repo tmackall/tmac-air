@@ -259,7 +259,7 @@ for f in ~/dotfiles/bash_functions.d/*.sh; do
     source "$f"
 done
 function cleanScreenshots(){
-    \rm ~/Desktop/Screenshot*
+    \rm ~/Screenshots/scr-*.png ~/Screenshots/rec-*.mov
 }
 # Claude Conversation Converter
 # Add this to your ~/.bashrc or ~/.bash_profile
