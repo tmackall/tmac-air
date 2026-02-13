@@ -10,6 +10,10 @@ shopt -s dirspell        # Autocorrect typos in directory names
 shopt -s globstar        # Enable ** for recursive globbing
 shopt -s nocaseglob      # Case-insensitive globbing
 
+# Blinking underline cursor with bright green color
+echo -ne '\e[3 q'
+echo -ne '\e]12;#00FF00\a'
+
 ###################
 # History
 ###################
@@ -269,7 +273,7 @@ for f in ~/dotfiles/bash_functions.d/*.sh; do
     source "$f"
 done
 function cleanScreenshots(){
-    \rm ~/Screenshots/scr-*.png ~/Screenshots/rec-*.mov
+    \rm -f ~/Screenshots/scr-*.png ~/Screenshots/rec-*.mov 2>/dev/null
 }
 # Claude Conversation Converter
 # Add this to your ~/.bashrc or ~/.bash_profile
