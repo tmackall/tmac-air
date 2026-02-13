@@ -2,7 +2,7 @@
   "rules": [
     {
       "label": "job search",
-      "from": ["linkedin", "dice.com", "dennis gorelik", "indeed.com", "jobs2careers", "glassdoor"]
+      "from": ["linkedin", "dice.com", "dennis gorelik", "indeed.com", "jobs2careers", "glassdoor", "roberthalf.com", "teksystems.com", "ceiamerica.com", "ashbyhq.com"]
     },
     {
       "label": "Chase",
@@ -10,7 +10,7 @@
     },
     {
       "label": "Personal Finance",
-      "from": ["rocketmoney", "mint", "nerdwallet"]
+      "from": ["rocketmoney", "mint", "nerdwallet", "fidelity.com"]
     },
     {
       "label": "NMF lawsuit",
@@ -22,6 +22,7 @@
         "xcelenergy",
         "alerts.comcast.net",
         "notifications.usbank.com",
+        "email.usbank.com",
         "centerpointenergy.com",
         "amwater.com",
         "dukeenergy",
@@ -33,12 +34,45 @@
         "googlepay-noreply@google.com",
         "payments-noreply@google.com",
         "iuhealth",
-        "firstfederalbanking.com"
+        "firstfederalbanking.com",
+        "outrig",
+        "godaddy.com"
       ]
     },
     {
       "label": "Purdue/Sports",
-      "from": ["on3.com"]
+      "from": ["on3.com", "nil.store", "internationalalumni", "gbiexpress", "purduesports.com", "specialevents", "purdue research foundation"]
+    },
+    {
+      "label": "Health",
+      "from": ["optumrx.com", "uchealth.org"]
+    },
+    {
+      "label": "HOA/Neighborhood",
+      "from": ["Niwot Meadow Farms"]
+    },
+    {
+      "label": "Local News",
+      "from": ["Lafayette Journal"]
+    },
+    {
+      "label": "Newsletters/Promotions",
+      "from": [
+        "mail.quince.com",
+        "realvnc.com",
+        "insteon.com",
+        "googlestore-noreply@google.com",
+        "charlieanderson",
+        "bigotires.com",
+        "hello.chamberlain.com",
+        "mail.wispr.ai",
+        "audible.com",
+        "copeland.com"
+      ]
+    },
+    {
+      "label": "Tech/Cloud",
+      "from": ["googlecloud@google.com", "CloudPlatform-noreply"]
     }
   ]
 }
