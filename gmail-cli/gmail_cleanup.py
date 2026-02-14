@@ -293,8 +293,8 @@ def get_messages_by_label(service, label_name, max_results=500):
     return messages
 
 
-def label_and_archive_messages(service, messages, label_name, batch_size=100):
-    """Apply label and remove from inbox (archive) in batches."""
+def label_and_archive_messages(service, messages, label_name, batch_size=100, archive=True):
+    """Apply label and optionally remove from inbox (archive) in batches."""
     total = len(messages)
     processed = 0
 
@@ -303,27 +303,32 @@ def label_and_archive_messages(service, messages, label_name, batch_size=100):
         print("Error: Could not get or create label")
         return 0
 
-    print(f"\nLabeling {total} messages with '{label_name}' and archiving...")
+    action = "and archiving" if archive else "(keeping in inbox)"
+    print(f"\nLabeling {total} messages with '{label_name}' {action}...")
 
     for i in range(0, total, batch_size):
         batch = messages[i:i + batch_size]
         message_ids = [msg['id'] for msg in batch]
 
+        body = {
+            'ids': message_ids,
+            'addLabelIds': [label_id],
+        }
+        if archive:
+            body['removeLabelIds'] = ['INBOX']
+
         try:
             service.users().messages().batchModify(
                 userId='me',
-                body={
-                    'ids': message_ids,
-                    'addLabelIds': [label_id],
-                    'removeLabelIds': ['INBOX']
-                }
+                body=body
             ).execute()
             processed += len(batch)
             print(f"  Processed {processed}/{total} messages...")
         except HttpError as e:
             print(f"  Error processing batch: {e}")
 
-    print(f"\nDone! Labeled and archived {processed} messages.")
+    action_past = "labeled and archived" if archive else "labeled"
+    print(f"\nDone! {action_past.capitalize()} {processed} messages.")
     return processed
 
 
@@ -348,6 +353,7 @@ def run_tidy_rules(service, dry_run=False, no_confirm=False, max_results=500):
         label = rule.get('label')
         from_patterns = rule.get('from', [])
         raw_query = rule.get('query')
+        archive = rule.get('archive', True)
 
         if not label or (not from_patterns and not raw_query):
             continue
@@ -373,17 +379,19 @@ def run_tidy_rules(service, dry_run=False, no_confirm=False, max_results=500):
         # Show preview
         preview_messages(service, messages, limit=5)
 
+        action_desc = "label and archive" if archive else "label (keep in inbox)"
+
         if dry_run:
-            print(f"\n[DRY RUN] Would label and archive {len(messages)} messages as '{label}'")
+            print(f"\n[DRY RUN] Would {action_desc} {len(messages)} messages as '{label}'")
             continue
 
         if not no_confirm:
-            response = input(f"\nLabel {len(messages)} messages as '{label}' and archive? [y/N]: ")
+            response = input(f"\n{action_desc.capitalize()} {len(messages)} messages as '{label}'? [y/N]: ")
             if response.lower() != 'y':
                 print("Skipped.")
                 continue
 
-        count = label_and_archive_messages(service, messages, label)
+        count = label_and_archive_messages(service, messages, label, archive=archive)
         total_processed += count
 
     print(f"\n{'='*60}")

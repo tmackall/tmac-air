@@ -40,8 +40,13 @@
       ]
     },
     {
+      "label": "Legal",
+      "from": ["FJGG"],
+      "archive": false
+    },
+    {
       "label": "Purdue/Sports",
-      "from": ["on3.com", "nil.store", "internationalalumni", "gbiexpress", "purduesports.com", "specialevents", "purdue research foundation"]
+      "from": ["on3.com", "nil.store", "internationalalumni", "gbiexpress", "purduesports.com", "specialevents", "\"purdue research foundation\""]
     },
     {
       "label": "Health",
