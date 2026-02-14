@@ -41,7 +41,7 @@
     },
     {
       "label": "Legal",
-      "from": ["FJGG"],
+      "from": ["FJGG", "frascona.com"],
       "archive": false
     },
     {
