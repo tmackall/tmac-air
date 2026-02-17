@@ -391,6 +391,11 @@ def run_tidy_rules(service, dry_run=False, no_confirm=False, max_results=500):
                 print("Skipped.")
                 continue
 
+            if not archive:
+                move_response = input(f"Also move out of inbox? [y/N]: ")
+                if move_response.lower() == 'y':
+                    archive = True
+
         count = label_and_archive_messages(service, messages, label, archive=archive)
         total_processed += count
 
