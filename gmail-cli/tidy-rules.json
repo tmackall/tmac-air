@@ -45,6 +45,70 @@
       "archive": false
     },
     {
+      "label": "Friends/Personal",
+      "from": [
+        "jackryanoutting@gmail.com",
+        "jvandy62@gmail.com",
+        "jjacksondg@gmail.com",
+        "kurt@pegasustcs.com",
+        "kilcar57@gmail.com",
+        "Aday789@yahoo.com",
+        "abgurney@gmail.com",
+        "austinstagman@gmail.com",
+        "bodo6t@gmail.com",
+        "brady2424@hotmail.com",
+        "brianseltzer@msdlt.k12.in.us",
+        "bdberry22@gmail.com",
+        "2dmetcalfe@gmail.com",
+        "darren.ellis70@gmail.com",
+        "derekmatthewslaw@gmail.com",
+        "ealtherr@me.com",
+        "fvisgatis@gmail.com",
+        "hellis@hdinstallations.com",
+        "jthendrickson17@hotmail.com",
+        "jimmcginley@yahoo.com",
+        "jimmyscheidler@gmail.com",
+        "jrmiller2398@gmail.com",
+        "mcginleyjon22@gmail.com",
+        "joe.wheeler@outlook.com",
+        "kmcginley720@sbcglobal.net",
+        "odred4@gmail.com",
+        "leon.x.carter@gmail.com",
+        "morranm@nationwide.com",
+        "michaeldillard182@yahoo.com",
+        "mcginleymichaelt66@yahoo.com",
+        "tcrkar1@gmail.com",
+        "tmcginley119@yahoo.com",
+        "tomaiono32@gmail.com",
+        "t.norris@acfpower.com",
+        "smcginley@cathedral-irish.org",
+        "bvmoser@gmail.com",
+        "joshua.b.greene@gmail.com",
+        "skpleak2@gmail.com",
+        "mroller2002@gmail.com",
+        "mcaito@kpmg.com",
+        "mrodgers2323@gmail.com",
+        "scottishal367@gmail.com",
+        "talberty@aol.com",
+        "jvcommons@gmail.com",
+        "jgrey5977@gmail.com",
+        "sleenortherntool@aol.com",
+        "leet65@att.net",
+        "theryanmcginley@gmail.com",
+        "mcginleybarry@gmail.com",
+        "jimokerson@gmail.com",
+        "jkelleyjfk@gmail.com",
+        "brucepleak3@yahoo.com",
+        "robwtyrrell2@gmail.com",
+        "mwmckinney07@gmail.com",
+        "ajett@umaau.com",
+        "charlesdubois@gmail.com",
+        "nicksantillo92@gmail.com",
+        "julie@yourgolfpackage.com"
+      ],
+      "archive": false
+    },
+    {
       "label": "Purdue/Sports",
       "from": ["on3.com", "nil.store", "internationalalumni", "gbiexpress", "purduesports.com", "specialevents", "\"purdue research foundation\""]
     },
@@ -78,6 +142,10 @@
     {
       "label": "Tech/Cloud",
       "from": ["googlecloud@google.com", "CloudPlatform-noreply"]
+    },
+    {
+      "label": "Taxes",
+      "from": ["irs.gov"]
     }
   ]
 }
