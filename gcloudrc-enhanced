@@ -1,0 +1,2072 @@
+#!/bin/bash
+# ==============================================================================
+# Enhanced GCloud CLI Helper Functions
+# ==============================================================================
+# Source this file in your .bashrc or .zshrc:
+#   source ~/gcloudrc-enhanced
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Clear any conflicting aliases from previous gcloudrc versions
+# ------------------------------------------------------------------------------
+unalias gps gi gf gflr gfls gsls gscp gsrm 2>/dev/null
+
+# ------------------------------------------------------------------------------
+# Configuration & Environment
+# ------------------------------------------------------------------------------
+# Always sync project from gcloud config (override any stale value)
+export PROJECT=$(gcloud config get-value project 2>/dev/null)
+export BUCKET_NAME="${BUCKET_NAME:-p-ulti-ml-prod-xfer}"
+export GCLOUD_REGION="${GCLOUD_REGION:-us-east4}"
+export GCLOUD_ZONE="${GCLOUD_ZONE:-us-east4-c}"
+
+# Colors for output
+_GC_RED='\033[0;31m'
+_GC_GREEN='\033[0;32m'
+_GC_YELLOW='\033[0;33m'
+_GC_BLUE='\033[0;34m'
+_GC_CYAN='\033[0;36m'
+_GC_NC='\033[0m' # No Color
+
+# Helper function for colored output
+_gc_info()  { echo -e "${_GC_CYAN}[INFO]${_GC_NC} $*"; }
+_gc_warn()  { echo -e "${_GC_YELLOW}[WARN]${_GC_NC} $*"; }
+_gc_error() { echo -e "${_GC_RED}[ERROR]${_GC_NC} $*"; }
+_gc_ok()    { echo -e "${_GC_GREEN}[OK]${_GC_NC} $*"; }
+_gc_cmd()   { echo -e "${_GC_BLUE}▶${_GC_NC} $*"; }
+
+# Confirmation prompt for destructive operations
+_gc_confirm() {
+  local msg="${1:-Are you sure?}"
+  read -p "$(echo -e "${_GC_YELLOW}${msg} [y/N]${_GC_NC} ")" -n 1 -r
+  echo
+  [[ $REPLY =~ ^[Yy]$ ]]
+}
+
+# Show current environment
+genv() {
+  local gcloud_project
+  gcloud_project=$(gcloud config get-value project 2>/dev/null)
+  
+  echo -e "\n${_GC_CYAN}=== GCloud Environment ===${_GC_NC}"
+  echo -e "PROJECT:      ${_GC_GREEN}${PROJECT}${_GC_NC}"
+  if [[ "$PROJECT" != "$gcloud_project" && -n "$gcloud_project" ]]; then
+    echo -e "              ${_GC_YELLOW}(gcloud config: ${gcloud_project}) - run 'gsyncenv' to sync${_GC_NC}"
+  fi
+  echo -e "BUCKET_NAME:  ${_GC_GREEN}${BUCKET_NAME}${_GC_NC}"
+  echo -e "REGION:       ${_GC_GREEN}${GCLOUD_REGION}${_GC_NC}"
+  echo -e "ZONE:         ${_GC_GREEN}${GCLOUD_ZONE}${_GC_NC}"
+  echo -e "ACCOUNT:      ${_GC_GREEN}$(gcloud config get-value account 2>/dev/null)${_GC_NC}"
+  echo ""
+}
+
+# Sync PROJECT variable with gcloud config
+gsyncenv() {
+  local gcloud_project
+  gcloud_project=$(gcloud config get-value project 2>/dev/null)
+  if [[ -n "$gcloud_project" ]]; then
+    export PROJECT="$gcloud_project"
+    _gc_ok "PROJECT synced to: $PROJECT"
+  else
+    _gc_error "No project set in gcloud config"
+    return 1
+  fi
+}
+
+# Set region
+gsetregion() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gsetregion <region>"
+    echo -e "Common regions: us-central1, us-east1, us-east4, us-west1, europe-west1"
+    echo -e "Current region: ${_GC_GREEN}${GCLOUD_REGION}${_GC_NC}"
+    return 1
+  fi
+  export GCLOUD_REGION="$1"
+  export GCLOUD_ZONE="${1}-b"  # Default to zone b
+  _gc_ok "Region set to: $1 (zone: ${1}-b)"
+}
+
+# Set zone
+gsetzone() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gsetzone <zone>"
+    echo -e "Current zone: ${_GC_GREEN}${GCLOUD_ZONE}${_GC_NC}"
+    return 1
+  fi
+  export GCLOUD_ZONE="$1"
+  _gc_ok "Zone set to: $1"
+}
+
+# ==============================================================================
+# HELP SYSTEM
+# ==============================================================================
+gchelp() {
+  local topic="${1:-all}"
+  
+  echo -e "\n${_GC_CYAN}╔══════════════════════════════════════════════════════════════╗${_GC_NC}"
+  echo -e "${_GC_CYAN}║           GCloud CLI Helper Functions                        ║${_GC_NC}"
+  echo -e "${_GC_CYAN}╚══════════════════════════════════════════════════════════════╝${_GC_NC}\n"
+  
+  case "$topic" in
+    config|cfg)
+      _gchelp_config
+      ;;
+    storage|gs)
+      _gchelp_storage
+      ;;
+    pubsub|ps)
+      _gchelp_pubsub
+      ;;
+    compute|vm)
+      _gchelp_compute
+      ;;
+    run|cr)
+      _gchelp_cloudrun
+      ;;
+    bq|bigquery)
+      _gchelp_bigquery
+      ;;
+    iam)
+      _gchelp_iam
+      ;;
+    secret|sm)
+      _gchelp_secrets
+      ;;
+    sql)
+      _gchelp_sql
+      ;;
+    logs)
+      _gchelp_logs
+      ;;
+    vertex|vai|ml)
+      _gchelp_vertex
+      ;;
+    all|*)
+      echo -e "Usage: ${_GC_GREEN}gchelp [topic]${_GC_NC}\n"
+      echo -e "Topics:"
+      echo -e "  ${_GC_YELLOW}config${_GC_NC}   - Project & account configuration"
+      echo -e "  ${_GC_YELLOW}storage${_GC_NC}  - Cloud Storage (gsutil) commands"
+      echo -e "  ${_GC_YELLOW}pubsub${_GC_NC}   - Pub/Sub topics & subscriptions"
+      echo -e "  ${_GC_YELLOW}compute${_GC_NC}  - Compute Engine (VMs)"
+      echo -e "  ${_GC_YELLOW}run${_GC_NC}      - Cloud Run services"
+      echo -e "  ${_GC_YELLOW}bq${_GC_NC}       - BigQuery"
+      echo -e "  ${_GC_YELLOW}iam${_GC_NC}      - IAM & service accounts"
+      echo -e "  ${_GC_YELLOW}secret${_GC_NC}   - Secret Manager"
+      echo -e "  ${_GC_YELLOW}sql${_GC_NC}      - Cloud SQL"
+      echo -e "  ${_GC_YELLOW}logs${_GC_NC}     - Cloud Logging"
+      echo -e "  ${_GC_YELLOW}vertex${_GC_NC}   - Vertex AI (ML platform)"
+      echo -e "\nQuick Commands:"
+      echo -e "  ${_GC_GREEN}genv${_GC_NC}        - Show current environment"
+      echo -e "  ${_GC_GREEN}gswitch${_GC_NC}     - Switch project interactively"
+      echo -e "  ${_GC_GREEN}gsetregion${_GC_NC}  - Set region (e.g. us-central1)"
+      ;;
+  esac
+  echo ""
+}
+
+_gchelp_config() {
+  echo -e "${_GC_YELLOW}Configuration Commands:${_GC_NC}"
+  echo -e "  gi           - gcloud init"
+  echo -e "  gpls         - List projects"
+  echo -e "  gpd          - Describe project"
+  echo -e "  gps <p>      - Set project"
+  echo -e "  gswitch      - Interactive project switch"
+  echo -e "  gsetregion   - Set region (e.g. us-central1)"
+  echo -e "  gsetzone     - Set zone (e.g. us-central1-a)"
+  echo -e "  gcls         - List config"
+  echo -e "  ginfo        - gcloud info"
+  echo -e "  gals         - List authenticated accounts"
+  echo -e "  gal          - gcloud auth login"
+  echo -e "  gsa <acc>    - Set account"
+  echo -e "  gcg <key>    - Get config value"
+  echo -e "  genv         - Show environment variables"
+}
+
+_gchelp_storage() {
+  echo -e "${_GC_YELLOW}Cloud Storage (gsutil) Commands:${_GC_NC}"
+  echo -e "  gsls [path]      - List bucket contents"
+  echo -e "  gslsx            - List default bucket contents"
+  echo -e "  gscp <src> <dst> - Copy files"
+  echo -e "  gscp2 <file>     - Copy file to default bucket"
+  echo -e "  gscpx <file>     - Copy from default bucket to ."
+  echo -e "  gsrm <path>      - Remove file"
+  echo -e "  gsrmx <file>     - Remove from default bucket"
+  echo -e "  gsmb <name>      - Make bucket"
+  echo -e "  gsdu <path>      - Disk usage"
+  echo -e "  gssync <s> <d>   - Sync directories"
+  echo -e "  gscat <file>     - Cat file contents"
+  echo -e "  gshead <file>    - Show first 50 lines"
+}
+
+_gchelp_pubsub() {
+  echo -e "${_GC_YELLOW}Pub/Sub Commands:${_GC_NC}"
+  echo -e "  gpstls           - List topics"
+  echo -e "  gpstmk <name>    - Create topic"
+  echo -e "  gpstrm <topic>   - Delete topic"
+  echo -e "  gpssls           - List subscriptions"
+  echo -e "  gpssmk <t> <s>   - Create subscription"
+  echo -e "  gpssrm <sub>     - Delete subscription"
+  echo -e "  gpstpub <t> <m>  - Publish message"
+  echo -e "  gpstpubf <t> <f> - Publish from JSON file"
+  echo -e "  gpsspull <sub>   - Pull messages"
+}
+
+_gchelp_compute() {
+  echo -e "${_GC_YELLOW}Compute Engine Commands:${_GC_NC}"
+  echo -e "  gvmls            - List VMs"
+  echo -e "  gvmstart <name>  - Start VM"
+  echo -e "  gvmstop <name>   - Stop VM"
+  echo -e "  gvmssh <name>    - SSH to VM"
+  echo -e "  gvmdesc <name>   - Describe VM"
+  echo -e "  gvmzones         - List zones"
+  echo -e "  gvmtypes         - List machine types"
+}
+
+_gchelp_cloudrun() {
+  echo -e "${_GC_YELLOW}Cloud Run Commands:${_GC_NC}"
+  echo -e "  gcrls            - List services"
+  echo -e "  gcrdesc <name>   - Describe service"
+  echo -e "  gcrlogs <name>   - View service logs"
+  echo -e "  gcrdeploy        - Deploy service"
+  echo -e "  gcrrevs <name>   - List revisions"
+  echo -e "  gcrurl <name>    - Get service URL"
+}
+
+_gchelp_bigquery() {
+  echo -e "${_GC_YELLOW}BigQuery Commands:${_GC_NC}"
+  echo -e "  bqls             - List datasets"
+  echo -e "  bqtls <dataset>  - List tables in dataset"
+  echo -e "  bqq <query>      - Run query"
+  echo -e "  bqqf <file>      - Run query from file"
+  echo -e "  bqschema <t>     - Show table schema"
+  echo -e "  bqhead <table>   - Preview table (10 rows)"
+  echo -e "  bqcost <query>   - Estimate query cost"
+}
+
+_gchelp_iam() {
+  echo -e "${_GC_YELLOW}IAM Commands:${_GC_NC}"
+  echo -e "  giamls           - List service accounts"
+  echo -e "  giamroles        - List roles"
+  echo -e "  giambindings     - List IAM bindings"
+  echo -e "  giammk <name>    - Create service account"
+  echo -e "  giamkey <sa>     - Create key for SA"
+  echo -e "  giamimp <sa>     - Impersonate service account"
+}
+
+_gchelp_secrets() {
+  echo -e "${_GC_YELLOW}Secret Manager Commands:${_GC_NC}"
+  echo -e "  gsmls            - List secrets"
+  echo -e "  gsmget <name>    - Get secret value"
+  echo -e "  gsmset <n> <v>   - Set/create secret"
+  echo -e "  gsmrm <name>     - Delete secret"
+  echo -e "  gsmvers <name>   - List secret versions"
+  echo -e "  gsmcache [proj]  - Build/refresh local secrets cache"
+  echo -e "  gsmcacheinfo     - Show cache status and age"
+  echo -e "  gsmcacheclr      - Clear the secrets cache"
+  echo -e "  gsmsearch <pat>  - Search secrets (uses cache if available)"
+  echo -e "                     Pass --live to bypass cache"
+}
+
+_gchelp_sql() {
+  echo -e "${_GC_YELLOW}Cloud SQL Commands:${_GC_NC}"
+  echo -e "  gsqlls           - List instances"
+  echo -e "  gsqldesc <name>  - Describe instance"
+  echo -e "  gsqlcon <name>   - Connect to instance"
+  echo -e "  gsqldbs <inst>   - List databases"
+}
+
+_gchelp_logs() {
+  echo -e "${_GC_YELLOW}Cloud Logging Commands:${_GC_NC}"
+  echo -e "  glogread [f]     - Read logs (optional filter)"
+  echo -e "  glogtail [f]     - Tail logs live"
+  echo -e "  glogerr          - Show recent errors"
+  echo -e "  gfls             - List Cloud Functions"
+  echo -e "  gflr <func>      - Read function logs"
+}
+
+_gchelp_vertex() {
+  echo -e "${_GC_YELLOW}Vertex AI Commands:${_GC_NC}"
+  echo -e ""
+  echo -e "  ${_GC_CYAN}Models & Endpoints:${_GC_NC}"
+  echo -e "  vaimodels           - List models"
+  echo -e "  vaimodeldesc <id>   - Describe model"
+  echo -e "  vaiendpoints        - List endpoints"
+  echo -e "  vaiepdesc <id>      - Describe endpoint"
+  echo -e "  vaiepcreate <name>  - Create endpoint"
+  echo -e "  vaideploy           - Deploy model to endpoint"
+  echo -e "  vaiundeploy         - Undeploy model from endpoint"
+  echo -e "  vaipredict <ep> <f> - Online prediction"
+  echo -e ""
+  echo -e "  ${_GC_CYAN}Training Jobs:${_GC_NC}"
+  echo -e "  vaijobs             - List custom jobs"
+  echo -e "  vaijobdesc <id>     - Describe job"
+  echo -e "  vaijobcancel <id>   - Cancel job"
+  echo -e "  vaijoblogs <id>     - View job logs"
+  echo -e "  vaihpjobs           - List hyperparameter tuning jobs"
+  echo -e ""
+  echo -e "  ${_GC_CYAN}Pipelines (REST API):${_GC_NC}"
+  echo -e "  vaipipelines        - List pipeline runs"
+  echo -e "  vaipipedesc <id>    - Describe pipeline run"
+  echo -e "  vaipipecancel <id>  - Cancel pipeline run"
+  echo -e "  vaipiperm <id>      - Delete pipeline run"
+  echo -e ""
+  echo -e "  ${_GC_CYAN}Datasets:${_GC_NC}"
+  echo -e "  vaidatasets         - List datasets"
+  echo -e "  vaidsdesc <id>      - Describe dataset"
+  echo -e ""
+  echo -e "  ${_GC_CYAN}Workbench (Notebooks):${_GC_NC}"
+  echo -e "  vainb               - List notebook instances"
+  echo -e "  vainbdesc <name>    - Describe notebook"
+  echo -e "  vainbstart <name>   - Start notebook"
+  echo -e "  vainbstop <name>    - Stop notebook"
+  echo -e ""
+  echo -e "  ${_GC_CYAN}Feature Store:${_GC_NC}"
+  echo -e "  vaifs               - List feature stores"
+  echo -e "  vaifsdesc <id>      - Describe feature store"
+  echo -e "  vaifg <fs>          - List feature groups (beta)"
+  echo -e ""
+  echo -e "  ${_GC_CYAN}Tensorboards:${_GC_NC}"
+  echo -e "  vaitb               - List tensorboards"
+  echo -e "  vaitbdesc <id>      - Describe tensorboard"
+  echo -e ""
+  echo -e "  ${_GC_CYAN}Index (Vector Search):${_GC_NC}"
+  echo -e "  vaiidx              - List indexes"
+  echo -e "  vaiidxdesc <id>     - Describe index"
+  echo -e "  vaiidxep            - List index endpoints"
+}
+
+# ==============================================================================
+# CONFIGURATION & AUTHENTICATION
+# ==============================================================================
+alias gi="gcloud init"
+alias gpls="gcloud projects list"
+alias gpd="gcloud projects describe"
+alias gcls="gcloud config list"
+alias ginfo="gcloud info"
+alias gals="gcloud auth list"
+alias gal="gcloud auth login"
+alias gcg="gcloud config get-value"
+alias gver="gcloud version"
+alias gclup="gcloud components update"  # renamed from gup to avoid git conflicts
+
+# Set project
+gps() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gps <project-id>"
+    return 1
+  fi
+  _gc_cmd "gcloud config set project $1"
+  gcloud config set project "$1"
+  export PROJECT="$1"
+  _gc_ok "Project set to: $1"
+}
+
+# Interactive project switch
+gswitch() {
+  _gc_info "Fetching available projects..."
+  local projects
+  projects=$(gcloud projects list --format="value(projectId)" 2>/dev/null)
+  
+  if [[ -z "$projects" ]]; then
+    _gc_error "No projects found or not authenticated"
+    return 1
+  fi
+  
+  echo -e "\n${_GC_CYAN}Available Projects:${_GC_NC}"
+  local i=1
+  local proj_array=()
+  while IFS= read -r proj; do
+    proj_array+=("$proj")
+    if [[ "$proj" == "$PROJECT" ]]; then
+      echo -e "  ${_GC_GREEN}$i) $proj (current)${_GC_NC}"
+    else
+      echo "  $i) $proj"
+    fi
+    ((i++))
+  done <<< "$projects"
+  
+  echo ""
+  read -p "Select project number (or 'q' to quit): " selection
+  
+  if [[ "$selection" == "q" ]]; then
+    return 0
+  fi
+  
+  if [[ "$selection" =~ ^[0-9]+$ ]] && [[ "$selection" -ge 1 ]] && [[ "$selection" -le "${#proj_array[@]}" ]]; then
+    local selected_project="${proj_array[$((selection-1))]}"
+    gps "$selected_project"
+  else
+    _gc_error "Invalid selection"
+    return 1
+  fi
+}
+
+# Set account
+gsa() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gsa <account-email>"
+    echo -e "Example: gsa tom.mackall@ukg.com"
+    return 1
+  fi
+  _gc_cmd "gcloud config set account $1"
+  gcloud config set account "$1"
+  _gc_ok "Account set to: $1"
+}
+
+# Activate service account
+gas() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gas <key-file.json>"
+    return 1
+  fi
+  if [[ ! -f "$1" ]]; then
+    _gc_error "Key file not found: $1"
+    return 1
+  fi
+  _gc_cmd "gcloud auth activate-service-account --key-file $1"
+  gcloud auth activate-service-account --key-file "$1"
+}
+
+# Impersonate service account
+giamimp() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: giamimp <service-account-email>"
+    return 1
+  fi
+  _gc_cmd "gcloud auth application-default login --impersonate-service-account=$1"
+  gcloud auth application-default login --impersonate-service-account="$1"
+}
+
+# Quick auth shortcuts (customize these)
+gcpdev() { gas ~/sa-ds.json; }
+gcpprod() { gas ~/sa-gcr-prod.json; }
+gta() { gsa tom.mackall@ukg.com && gals; }
+
+# Predefined impersonation shortcuts
+gatestsvc() {
+  giamimp "svc-test01-datascience@d-ulti-test-ds-dev.iam.gserviceaccount.com"
+}
+gimpsvc() {
+  giamimp "svc-ds-dataengineering-dev@d-ulti-ml-ds-dev-9561.iam.gserviceaccount.com"
+}
+gsvcdev() {
+  giamimp "svc-gcp-datascience-gsm@d-ulti-ml-ds-dev-9561.iam.gserviceaccount.com"
+}
+gsvcprod() {
+  giamimp "svc-gcp-datascience-gsm@p-ulti-ml-ds-prod-40d5.iam.gserviceaccount.com"
+}
+
+# ==============================================================================
+# CLOUD STORAGE (gsutil)
+# ==============================================================================
+alias gsmb="gsutil mb"
+
+gsls() {
+  local path="${1:-gs://${BUCKET_NAME}/}"
+  _gc_cmd "gsutil ls $path"
+  gsutil ls "$path"
+}
+
+gslsx() {
+  gsls "gs://${BUCKET_NAME}/"
+}
+
+gscp() {
+  if [[ $# -lt 2 ]]; then
+    _gc_error "Usage: gscp <source> <destination>"
+    echo -e "Example: gscp my.log gs://${BUCKET_NAME}/"
+    return 1
+  fi
+  _gc_cmd "gsutil cp $*"
+  gsutil cp "$@"
+}
+
+# Copy with parallel composite uploads for large files
+gscpp() {
+  if [[ $# -lt 2 ]]; then
+    _gc_error "Usage: gscpp <source> <destination>"
+    return 1
+  fi
+  _gc_cmd "gsutil -o GSUtil:parallel_composite_upload_threshold=150M cp $*"
+  gsutil -o GSUtil:parallel_composite_upload_threshold=150M cp "$@"
+}
+
+# Copy to default bucket
+gscp2() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gscp2 <local-file>"
+    echo -e "Copies file to gs://${BUCKET_NAME}/"
+    return 1
+  fi
+  _gc_cmd "gsutil cp $1 gs://${BUCKET_NAME}/"
+  gsutil cp "$1" "gs://${BUCKET_NAME}/"
+}
+
+# Copy from default bucket
+gscpx() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gscpx <remote-file>"
+    echo -e "Copies gs://${BUCKET_NAME}/<file> to current directory"
+    return 1
+  fi
+  _gc_cmd "gsutil cp gs://${BUCKET_NAME}/$1 ."
+  gsutil cp "gs://${BUCKET_NAME}/$1" .
+}
+
+# Remove file
+gsrm() {
+  if [[ $# -lt 1 ]]; then
+    _gc_error "Usage: gsrm <gs-path>"
+    return 1
+  fi
+  if _gc_confirm "Delete $* ?"; then
+    _gc_cmd "gsutil rm $*"
+    gsutil rm "$@"
+  fi
+}
+
+# Remove from default bucket
+gsrmx() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gsrmx <filename>"
+    echo -e "Deletes gs://${BUCKET_NAME}/<file>"
+    return 1
+  fi
+  if _gc_confirm "Delete gs://${BUCKET_NAME}/$1 ?"; then
+    _gc_cmd "gsutil rm gs://${BUCKET_NAME}/$1"
+    gsutil rm "gs://${BUCKET_NAME}/$1"
+  fi
+}
+
+# Disk usage
+gsdu() {
+  local path="${1:-gs://${BUCKET_NAME}/}"
+  _gc_cmd "gsutil du -sh $path"
+  gsutil du -sh "$path"
+}
+
+# Sync directories
+gssync() {
+  if [[ $# -ne 2 ]]; then
+    _gc_error "Usage: gssync <source> <destination>"
+    return 1
+  fi
+  _gc_cmd "gsutil -m rsync -r $1 $2"
+  gsutil -m rsync -r "$1" "$2"
+}
+
+# Cat file contents
+gscat() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gscat <gs-path>"
+    return 1
+  fi
+  _gc_cmd "gsutil cat $1"
+  gsutil cat "$1"
+}
+
+# Show first N lines of a file
+gshead() {
+  local file="$1"
+  local lines="${2:-50}"
+  if [[ -z "$file" ]]; then
+    _gc_error "Usage: gshead <gs-path> [num-lines]"
+    return 1
+  fi
+  _gc_cmd "gsutil cat $file | head -n $lines"
+  gsutil cat "$file" | head -n "$lines"
+}
+
+# Copy logs from prod (custom)
+gslogs() {
+  gcpprod
+  _gc_cmd "Copying service logs from production..."
+  gsutil cp "gs://p-ulti-ml-prod-xfer/service*.log*" .
+  gsutil cp "gs://p-ulti-ml-prod-xfer/*.txt" .
+}
+
+# ==============================================================================
+# CLOUD FUNCTIONS
+# ==============================================================================
+alias gfls="gcloud functions list"
+
+gflr() {
+  local func="$1"
+  local limit="${2:-50}"
+  if [[ -z "$func" ]]; then
+    _gc_cmd "gcloud functions logs read --region ${GCLOUD_REGION} --limit $limit"
+    gcloud functions logs read --region "${GCLOUD_REGION}" --limit "$limit"
+  else
+    _gc_cmd "gcloud functions logs read $func --region ${GCLOUD_REGION} --limit $limit"
+    gcloud functions logs read "$func" --region "${GCLOUD_REGION}" --limit "$limit"
+  fi
+}
+
+gf() {
+  _gc_cmd "gcloud functions $*"
+  gcloud functions "$@"
+}
+
+# ==============================================================================
+# PUB/SUB
+# ==============================================================================
+gpstls() {
+  _gc_cmd "gcloud pubsub topics list"
+  gcloud pubsub topics list
+}
+
+gpstmk() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gpstmk <topic-name>"
+    return 1
+  fi
+  _gc_cmd "gcloud pubsub topics create $1"
+  gcloud pubsub topics create "$1"
+}
+
+gpstrm() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gpstrm <topic-name>"
+    echo -e "Example: gpstrm projects/${PROJECT}/topics/my-topic"
+    return 1
+  fi
+  if _gc_confirm "Delete topic $1 ?"; then
+    _gc_cmd "gcloud pubsub topics delete $1"
+    gcloud pubsub topics delete "$1"
+  fi
+}
+
+gpssls() {
+  _gc_cmd "gcloud pubsub subscriptions list"
+  gcloud pubsub subscriptions list
+}
+
+gpssmk() {
+  if [[ $# -ne 2 ]]; then
+    _gc_error "Usage: gpssmk <topic> <subscription-name>"
+    echo -e "Example: gpssmk projects/${PROJECT}/topics/my-topic my-sub"
+    return 1
+  fi
+  _gc_cmd "gcloud pubsub subscriptions create --topic=$1 --topic-project=${PROJECT} $2"
+  gcloud pubsub subscriptions create --topic="$1" --topic-project="${PROJECT}" "$2"
+}
+
+gpssrm() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gpssrm <subscription-name>"
+    return 1
+  fi
+  if _gc_confirm "Delete subscription $1 ?"; then
+    _gc_cmd "gcloud pubsub subscriptions delete $1"
+    gcloud pubsub subscriptions delete "$1"
+  fi
+}
+
+gpstpub() {
+  if [[ $# -ne 2 ]]; then
+    _gc_error "Usage: gpstpub <topic> <message>"
+    return 1
+  fi
+  _gc_cmd "gcloud pubsub topics publish $1 --message \"$2\""
+  gcloud pubsub topics publish "$1" --message "$2"
+}
+
+gpstpubf() {
+  if [[ $# -ne 2 ]]; then
+    _gc_error "Usage: gpstpubf <topic> <json-file>"
+    return 1
+  fi
+  if [[ ! -f "$2" ]]; then
+    _gc_error "File not found: $2"
+    return 1
+  fi
+  local data
+  data=$(cat "$2" | jq -c)
+  _gc_cmd "gcloud pubsub topics publish $1 --message '${data}'"
+  gcloud pubsub topics publish "$1" --message "${data}"
+}
+
+# Pull messages from subscription
+gpsspull() {
+  local sub="$1"
+  local limit="${2:-10}"
+  if [[ -z "$sub" ]]; then
+    _gc_error "Usage: gpsspull <subscription> [limit]"
+    return 1
+  fi
+  _gc_cmd "gcloud pubsub subscriptions pull $sub --limit=$limit --auto-ack"
+  gcloud pubsub subscriptions pull "$sub" --limit="$limit" --auto-ack
+}
+
+# ==============================================================================
+# COMPUTE ENGINE (VMs)
+# ==============================================================================
+gvmls() {
+  _gc_cmd "gcloud compute instances list"
+  gcloud compute instances list
+}
+
+gvmstart() {
+  if [[ $# -lt 1 ]]; then
+    _gc_error "Usage: gvmstart <instance-name> [zone]"
+    return 1
+  fi
+  local zone="${2:-$GCLOUD_ZONE}"
+  _gc_cmd "gcloud compute instances start $1 --zone=$zone"
+  gcloud compute instances start "$1" --zone="$zone"
+}
+
+gvmstop() {
+  if [[ $# -lt 1 ]]; then
+    _gc_error "Usage: gvmstop <instance-name> [zone]"
+    return 1
+  fi
+  local zone="${2:-$GCLOUD_ZONE}"
+  if _gc_confirm "Stop instance $1 ?"; then
+    _gc_cmd "gcloud compute instances stop $1 --zone=$zone"
+    gcloud compute instances stop "$1" --zone="$zone"
+  fi
+}
+
+gvmssh() {
+  if [[ $# -lt 1 ]]; then
+    _gc_error "Usage: gvmssh <instance-name> [zone]"
+    return 1
+  fi
+  local zone="${2:-$GCLOUD_ZONE}"
+  _gc_cmd "gcloud compute ssh $1 --zone=$zone"
+  gcloud compute ssh "$1" --zone="$zone"
+}
+
+gvmdesc() {
+  if [[ $# -lt 1 ]]; then
+    _gc_error "Usage: gvmdesc <instance-name> [zone]"
+    return 1
+  fi
+  local zone="${2:-$GCLOUD_ZONE}"
+  _gc_cmd "gcloud compute instances describe $1 --zone=$zone"
+  gcloud compute instances describe "$1" --zone="$zone"
+}
+
+gvmzones() {
+  _gc_cmd "gcloud compute zones list"
+  gcloud compute zones list
+}
+
+gvmtypes() {
+  local zone="${1:-$GCLOUD_ZONE}"
+  _gc_cmd "gcloud compute machine-types list --zones=$zone"
+  gcloud compute machine-types list --zones="$zone"
+}
+
+# SCP to/from VM
+gvmscp() {
+  if [[ $# -lt 2 ]]; then
+    _gc_error "Usage: gvmscp <source> <destination>"
+    echo -e "Example: gvmscp ./file.txt my-vm:~/file.txt"
+    return 1
+  fi
+  local zone="${GCLOUD_ZONE}"
+  _gc_cmd "gcloud compute scp --zone=$zone $*"
+  gcloud compute scp --zone="$zone" "$@"
+}
+
+# ==============================================================================
+# CLOUD RUN
+# ==============================================================================
+gcrls() {
+  _gc_cmd "gcloud run services list --region=${GCLOUD_REGION}"
+  gcloud run services list --region="${GCLOUD_REGION}"
+}
+
+gcrdesc() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gcrdesc <service-name>"
+    return 1
+  fi
+  _gc_cmd "gcloud run services describe $1 --region=${GCLOUD_REGION}"
+  gcloud run services describe "$1" --region="${GCLOUD_REGION}"
+}
+
+gcrlogs() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gcrlogs <service-name>"
+    return 1
+  fi
+  _gc_cmd "gcloud logging read \"resource.type=cloud_run_revision AND resource.labels.service_name=$1\" --limit=50"
+  gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=$1" --limit=50
+}
+
+gcrrevs() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gcrrevs <service-name>"
+    return 1
+  fi
+  _gc_cmd "gcloud run revisions list --service=$1 --region=${GCLOUD_REGION}"
+  gcloud run revisions list --service="$1" --region="${GCLOUD_REGION}"
+}
+
+gcrurl() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gcrurl <service-name>"
+    return 1
+  fi
+  _gc_cmd "gcloud run services describe $1 --region=${GCLOUD_REGION} --format='value(status.url)'"
+  gcloud run services describe "$1" --region="${GCLOUD_REGION}" --format='value(status.url)'
+}
+
+gcrdeploy() {
+  if [[ $# -lt 2 ]]; then
+    _gc_error "Usage: gcrdeploy <service-name> <image>"
+    echo -e "Example: gcrdeploy my-service gcr.io/project/image:tag"
+    return 1
+  fi
+  _gc_cmd "gcloud run deploy $1 --image=$2 --region=${GCLOUD_REGION}"
+  gcloud run deploy "$1" --image="$2" --region="${GCLOUD_REGION}"
+}
+
+# ==============================================================================
+# BIGQUERY
+# ==============================================================================
+bqls() {
+  _gc_cmd "bq ls"
+  bq ls
+}
+
+bqtls() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: bqtls <dataset>"
+    return 1
+  fi
+  _gc_cmd "bq ls $1"
+  bq ls "$1"
+}
+
+bqq() {
+  if [[ $# -lt 1 ]]; then
+    _gc_error "Usage: bqq <query>"
+    return 1
+  fi
+  _gc_cmd "bq query --use_legacy_sql=false \"$*\""
+  bq query --use_legacy_sql=false "$*"
+}
+
+bqqf() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: bqqf <sql-file>"
+    return 1
+  fi
+  if [[ ! -f "$1" ]]; then
+    _gc_error "File not found: $1"
+    return 1
+  fi
+  _gc_cmd "bq query --use_legacy_sql=false < $1"
+  bq query --use_legacy_sql=false < "$1"
+}
+
+bqschema() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: bqschema <dataset.table>"
+    return 1
+  fi
+  _gc_cmd "bq show --schema --format=prettyjson $1"
+  bq show --schema --format=prettyjson "$1"
+}
+
+bqhead() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: bqhead <dataset.table>"
+    return 1
+  fi
+  local rows="${2:-10}"
+  _gc_cmd "bq head -n $rows $1"
+  bq head -n "$rows" "$1"
+}
+
+bqcost() {
+  if [[ $# -lt 1 ]]; then
+    _gc_error "Usage: bqcost <query>"
+    return 1
+  fi
+  _gc_cmd "bq query --dry_run --use_legacy_sql=false \"$*\""
+  bq query --dry_run --use_legacy_sql=false "$*"
+}
+
+# ==============================================================================
+# IAM & SERVICE ACCOUNTS
+# ==============================================================================
+giamls() {
+  _gc_cmd "gcloud iam service-accounts list"
+  gcloud iam service-accounts list
+}
+
+giamroles() {
+  _gc_cmd "gcloud iam roles list --project=${PROJECT}"
+  gcloud iam roles list --project="${PROJECT}"
+}
+
+giambindings() {
+  _gc_cmd "gcloud projects get-iam-policy ${PROJECT}"
+  gcloud projects get-iam-policy "${PROJECT}"
+}
+
+giammk() {
+  if [[ $# -lt 1 ]]; then
+    _gc_error "Usage: giammk <name> [display-name]"
+    return 1
+  fi
+  local display="${2:-$1}"
+  _gc_cmd "gcloud iam service-accounts create $1 --display-name=\"$display\""
+  gcloud iam service-accounts create "$1" --display-name="$display"
+}
+
+giamkey() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: giamkey <service-account-email>"
+    return 1
+  fi
+  local keyfile="$HOME/${1%%@*}-key.json"
+  _gc_cmd "gcloud iam service-accounts keys create $keyfile --iam-account=$1"
+  gcloud iam service-accounts keys create "$keyfile" --iam-account="$1"
+  _gc_ok "Key saved to: $keyfile"
+}
+
+# ==============================================================================
+# SECRET MANAGER
+# ==============================================================================
+gsmls() {
+  _gc_cmd "gcloud secrets list"
+  gcloud secrets list
+}
+
+gsmget() {
+  if [[ $# -lt 1 ]]; then
+    _gc_error "Usage: gsmget <secret-name> [version]"
+    return 1
+  fi
+  local version="${2:-latest}"
+  _gc_cmd "gcloud secrets versions access $version --secret=$1"
+  gcloud secrets versions access "$version" --secret="$1"
+}
+
+gsmset() {
+  if [[ $# -ne 2 ]]; then
+    _gc_error "Usage: gsmset <secret-name> <value>"
+    echo -e "Or pipe: echo 'value' | gsmset <secret-name> -"
+    return 1
+  fi
+  # Check if secret exists
+  if gcloud secrets describe "$1" &>/dev/null; then
+    _gc_cmd "Adding new version to existing secret..."
+    echo -n "$2" | gcloud secrets versions add "$1" --data-file=-
+  else
+    _gc_cmd "Creating new secret..."
+    echo -n "$2" | gcloud secrets create "$1" --data-file=-
+  fi
+}
+
+gsmrm() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gsmrm <secret-name>"
+    return 1
+  fi
+  if _gc_confirm "Delete secret $1 ?"; then
+    _gc_cmd "gcloud secrets delete $1"
+    gcloud secrets delete "$1"
+  fi
+}
+
+gsmvers() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gsmvers <secret-name>"
+    return 1
+  fi
+  _gc_cmd "gcloud secrets versions list $1"
+  gcloud secrets versions list "$1"
+}
+
+# --- Secrets Cache ---
+_GSM_CACHE_DIR="${HOME}/.cache/gsm"
+
+# Build/refresh the secrets cache for a project
+gsmcache() {
+  local project="${1:-$PROJECT}"
+  local cache_dir="${_GSM_CACHE_DIR}/${project}"
+  local is_tty=false
+  [[ -t 1 ]] && is_tty=true
+
+  mkdir -p "$cache_dir"
+
+  _gc_info "Caching secrets for project: $project"
+
+  local secrets
+  secrets=($(gcloud secrets list --project="$project" --format="value(name)"))
+  local total=${#secrets[@]}
+  local current=0
+  local cached=0
+  local failed=0
+
+  _gc_info "Found $total secrets to cache..."
+
+  for secret in "${secrets[@]}"; do
+    ((current++))
+    if $is_tty; then
+      echo -ne "\rCaching $current/$total: $secret                    "
+    fi
+
+    local outfile="${cache_dir}/${secret}"
+
+    if ! gcloud secrets versions access latest --secret="$secret" --project="$project" >"$outfile" 2>/dev/null; then
+      rm -f "$outfile"
+      ((failed++))
+      continue
+    fi
+
+    # If not JSON, try base64 decode and store decoded version
+    if ! head -c 1 "$outfile" | grep -q '{'; then
+      local decoded_tmp
+      decoded_tmp=$(mktemp)
+      if { base64 -D < "$outfile" > "$decoded_tmp" 2>/dev/null || base64 -d < "$outfile" > "$decoded_tmp" 2>/dev/null; } && [[ -s "$decoded_tmp" ]]; then
+        mv "$decoded_tmp" "$outfile"
+        # Mark as base64-decoded with a sidecar flag
+        touch "${outfile}.b64decoded"
+      else
+        rm -f "$decoded_tmp"
+        rm -f "${outfile}.b64decoded"
+      fi
+    else
+      rm -f "${outfile}.b64decoded"
+    fi
+
+    ((cached++))
+  done
+
+  # Write cache metadata
+  date -u +"%Y-%m-%dT%H:%M:%SZ" > "${cache_dir}/.cache_timestamp"
+
+  echo ""
+  _gc_ok "Cached $cached secrets ($failed failed) in ${cache_dir}"
+  _gc_info "Cache timestamp: $(cat "${cache_dir}/.cache_timestamp")"
+}
+
+# Show cache age / status
+gsmcacheinfo() {
+  local project="${1:-$PROJECT}"
+  local cache_dir="${_GSM_CACHE_DIR}/${project}"
+  local ts_file="${cache_dir}/.cache_timestamp"
+
+  if [[ ! -f "$ts_file" ]]; then
+    _gc_warn "No cache found for project: $project"
+    _gc_info "Run 'gsmcache' to build one."
+    return 1
+  fi
+
+  local cached_at
+  cached_at=$(cat "$ts_file")
+  local count
+  count=$(find "$cache_dir" -maxdepth 1 -type f ! -name '.*' ! -name '*.b64decoded' | wc -l | tr -d ' ')
+
+  echo -e "${_GC_CYAN}=== Secrets Cache ===${_GC_NC}"
+  echo -e "Project:    ${_GC_GREEN}${project}${_GC_NC}"
+  echo -e "Cached at:  ${_GC_GREEN}${cached_at}${_GC_NC}"
+  echo -e "Secrets:    ${_GC_GREEN}${count}${_GC_NC}"
+  echo -e "Location:   ${cache_dir}"
+}
+
+# Clear the cache
+gsmcacheclr() {
+  local project="${1:-$PROJECT}"
+  local cache_dir="${_GSM_CACHE_DIR}/${project}"
+
+  if [[ ! -d "$cache_dir" ]]; then
+    _gc_warn "No cache found for project: $project"
+    return 0
+  fi
+
+  if _gc_confirm "Clear secrets cache for $project ?"; then
+    rm -rf "$cache_dir"
+    _gc_ok "Cache cleared for $project"
+  fi
+}
+
+# Search all secrets for a value matching a pattern
+gsmsearch() {
+  local live=false
+  local args=()
+
+  # Parse flags
+  for arg in "$@"; do
+    case "$arg" in
+      --live) live=true ;;
+      *) args+=("$arg") ;;
+    esac
+  done
+
+  if [[ ${#args[@]} -lt 1 ]]; then
+    _gc_error "Usage: gsmsearch <pattern> [project] [--live]"
+    echo -e "Search all secrets for values matching a regex pattern."
+    echo -e ""
+    echo -e "Uses local cache if available (run 'gsmcache' to build)."
+    echo -e "Pass --live to bypass cache and query GCP directly."
+    echo -e ""
+    echo -e "Example: gsmsearch 'my-service-account@'"
+    echo -e "Example: gsmsearch 'BEGIN.*PRIVATE KEY' my-other-project"
+    echo -e "Example: gsmsearch 'password' --live"
+    return 1
+  fi
+
+  local pattern="${args[0]}"
+  local project="${args[1]:-$PROJECT}"
+  local cache_dir="${_GSM_CACHE_DIR}/${project}"
+  local is_tty=false
+  [[ -t 1 ]] && is_tty=true
+
+  # Decide: use cache or live
+  if ! $live && [[ -f "${cache_dir}/.cache_timestamp" ]]; then
+    # --- Cached search ---
+    local cached_at
+    cached_at=$(cat "${cache_dir}/.cache_timestamp")
+
+    if $is_tty; then
+      _gc_info "Pattern: $pattern"
+      _gc_info "Searching cached secrets for $project (cached: $cached_at)"
+      _gc_info "Use --live to bypass cache, 'gsmcache' to refresh."
+    else
+      echo "Pattern: $pattern"
+      echo "Searching cached secrets for $project (cached: $cached_at)"
+    fi
+
+    local matches=0
+    local total=0
+
+    for secret_file in "${cache_dir}"/*; do
+      [[ -f "$secret_file" ]] || continue
+      local basename
+      basename=$(basename "$secret_file")
+      # Skip metadata and sidecar files
+      [[ "$basename" == .* ]] && continue
+      [[ "$basename" == *.b64decoded ]] && continue
+
+      ((total++))
+
+      if grep -qE "$pattern" "$secret_file" 2>/dev/null; then
+        local suffix=""
+        [[ -f "${secret_file}.b64decoded" ]] && suffix=" (base64 decoded)"
+        if $is_tty; then
+          _gc_ok "MATCH: ${basename}${suffix}"
+        else
+          echo "MATCH: ${basename}${suffix}"
+        fi
+        ((matches++))
+      fi
+    done
+
+    echo ""
+    if $is_tty; then
+      _gc_info "Done. Found $matches match(es) in $total cached secrets."
+    else
+      echo "Done. Found $matches match(es) in $total cached secrets."
+    fi
+  else
+    # --- Live search (original behavior) ---
+    if $is_tty; then
+      if ! $live; then
+        _gc_warn "No cache found. Searching live (run 'gsmcache' to speed up future searches)."
+      fi
+    fi
+
+    local secrets
+    secrets=($(gcloud secrets list --project="$project" --format="value(name)"))
+    local total=${#secrets[@]}
+    local current=0
+    local matches=0
+
+    if $is_tty; then
+      _gc_info "Pattern: $pattern"
+      _gc_info "Searching $total secrets in $project (live)..."
+    else
+      echo "Pattern: $pattern"
+      echo "Searching $total secrets in $project (live)..."
+    fi
+
+    for secret in "${secrets[@]}"; do
+      ((current++))
+      if $is_tty; then
+        echo -ne "\rChecking $current/$total: $secret                    "
+      fi
+
+      local tmpfile
+      tmpfile=$(mktemp)
+
+      if ! gcloud secrets versions access latest --secret="$secret" --project="$project" >"$tmpfile" 2>/dev/null; then
+        rm -f "$tmpfile"
+        continue
+      fi
+
+      local decoded_match=false
+
+      # If not JSON, try base64 decode
+      if ! head -c 1 "$tmpfile" | grep -q '{'; then
+        local decoded_tmp
+        decoded_tmp=$(mktemp)
+        if { base64 -D < "$tmpfile" > "$decoded_tmp" 2>/dev/null || base64 -d < "$tmpfile" > "$decoded_tmp" 2>/dev/null; } && [[ -s "$decoded_tmp" ]]; then
+          mv "$decoded_tmp" "$tmpfile"
+          decoded_match=true
+        else
+          rm -f "$decoded_tmp"
+        fi
+      fi
+
+      if grep -qE "$pattern" "$tmpfile" 2>/dev/null; then
+        if $decoded_match; then
+          if $is_tty; then
+            echo -e "\n$(_gc_ok "MATCH: $secret (base64 decoded)")"
+          else
+            echo "MATCH: $secret (base64 decoded)"
+          fi
+        else
+          if $is_tty; then
+            echo -e "\n$(_gc_ok "MATCH: $secret")"
+          else
+            echo "MATCH: $secret"
+          fi
+        fi
+        ((matches++))
+      fi
+
+      rm -f "$tmpfile"
+    done
+
+    echo ""
+    if $is_tty; then
+      _gc_info "Done. Found $matches match(es) in $total secrets."
+    else
+      echo "Done. Found $matches match(es) in $total secrets."
+    fi
+  fi
+}
+
+# ==============================================================================
+# CLOUD SQL
+# ==============================================================================
+gsqlls() {
+  _gc_cmd "gcloud sql instances list"
+  gcloud sql instances list
+}
+
+gsqldesc() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gsqldesc <instance-name>"
+    return 1
+  fi
+  _gc_cmd "gcloud sql instances describe $1"
+  gcloud sql instances describe "$1"
+}
+
+gsqlcon() {
+  if [[ $# -lt 1 ]]; then
+    _gc_error "Usage: gsqlcon <instance-name> [user]"
+    return 1
+  fi
+  local user="${2:-postgres}"
+  _gc_cmd "gcloud sql connect $1 --user=$user"
+  gcloud sql connect "$1" --user="$user"
+}
+
+gsqldbs() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gsqldbs <instance-name>"
+    return 1
+  fi
+  _gc_cmd "gcloud sql databases list --instance=$1"
+  gcloud sql databases list --instance="$1"
+}
+
+# ==============================================================================
+# CLOUD LOGGING
+# ==============================================================================
+glogread() {
+  local filter="$1"
+  local limit="${2:-50}"
+  if [[ -z "$filter" ]]; then
+    _gc_cmd "gcloud logging read --limit=$limit --format='table(timestamp,severity,textPayload)'"
+    gcloud logging read --limit="$limit" --format='table(timestamp,severity,textPayload)'
+  else
+    _gc_cmd "gcloud logging read \"$filter\" --limit=$limit --format='table(timestamp,severity,textPayload)'"
+    gcloud logging read "$filter" --limit="$limit" --format='table(timestamp,severity,textPayload)'
+  fi
+}
+
+glogtail() {
+  local filter="${1:-}"
+  if [[ -z "$filter" ]]; then
+    _gc_cmd "gcloud logging tail"
+    gcloud logging tail
+  else
+    _gc_cmd "gcloud logging tail \"$filter\""
+    gcloud logging tail "$filter"
+  fi
+}
+
+glogerr() {
+  local limit="${1:-20}"
+  _gc_cmd "gcloud logging read 'severity>=ERROR' --limit=$limit"
+  gcloud logging read 'severity>=ERROR' --limit="$limit"
+}
+
+# ==============================================================================
+# CONTAINER REGISTRY / ARTIFACT REGISTRY
+# ==============================================================================
+gcrils() {
+  _gc_cmd "gcloud container images list"
+  gcloud container images list
+}
+
+gcritags() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gcritags <image>"
+    return 1
+  fi
+  _gc_cmd "gcloud container images list-tags $1"
+  gcloud container images list-tags "$1"
+}
+
+# Artifact Registry
+garls() {
+  _gc_cmd "gcloud artifacts repositories list --location=${GCLOUD_REGION}"
+  gcloud artifacts repositories list --location="${GCLOUD_REGION}"
+}
+
+garimages() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: garimages <repository>"
+    return 1
+  fi
+  _gc_cmd "gcloud artifacts docker images list ${GCLOUD_REGION}-docker.pkg.dev/${PROJECT}/$1"
+  gcloud artifacts docker images list "${GCLOUD_REGION}-docker.pkg.dev/${PROJECT}/$1"
+}
+
+# ==============================================================================
+# GKE (Kubernetes Engine)
+# ==============================================================================
+gkels() {
+  _gc_cmd "gcloud container clusters list"
+  gcloud container clusters list
+}
+
+gkecreds() {
+  if [[ $# -lt 1 ]]; then
+    _gc_error "Usage: gkecreds <cluster-name> [zone]"
+    return 1
+  fi
+  local zone="${2:-$GCLOUD_ZONE}"
+  _gc_cmd "gcloud container clusters get-credentials $1 --zone=$zone"
+  gcloud container clusters get-credentials "$1" --zone="$zone"
+}
+
+gkedesc() {
+  if [[ $# -lt 1 ]]; then
+    _gc_error "Usage: gkedesc <cluster-name> [zone]"
+    return 1
+  fi
+  local zone="${2:-$GCLOUD_ZONE}"
+  _gc_cmd "gcloud container clusters describe $1 --zone=$zone"
+  gcloud container clusters describe "$1" --zone="$zone"
+}
+
+# ==============================================================================
+# DATAFLOW
+# ==============================================================================
+gdfls() {
+  _gc_cmd "gcloud dataflow jobs list --region=${GCLOUD_REGION}"
+  gcloud dataflow jobs list --region="${GCLOUD_REGION}"
+}
+
+gdfdesc() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gdfdesc <job-id>"
+    return 1
+  fi
+  _gc_cmd "gcloud dataflow jobs describe $1 --region=${GCLOUD_REGION}"
+  gcloud dataflow jobs describe "$1" --region="${GCLOUD_REGION}"
+}
+
+gdfcancel() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gdfcancel <job-id>"
+    return 1
+  fi
+  if _gc_confirm "Cancel Dataflow job $1 ?"; then
+    _gc_cmd "gcloud dataflow jobs cancel $1 --region=${GCLOUD_REGION}"
+    gcloud dataflow jobs cancel "$1" --region="${GCLOUD_REGION}"
+  fi
+}
+
+# ==============================================================================
+# SCHEDULER
+# ==============================================================================
+gschedls() {
+  _gc_cmd "gcloud scheduler jobs list --location=${GCLOUD_REGION}"
+  gcloud scheduler jobs list --location="${GCLOUD_REGION}"
+}
+
+gscheddesc() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gscheddesc <job-name>"
+    return 1
+  fi
+  _gc_cmd "gcloud scheduler jobs describe $1 --location=${GCLOUD_REGION}"
+  gcloud scheduler jobs describe "$1" --location="${GCLOUD_REGION}"
+}
+
+gschedrun() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gschedrun <job-name>"
+    return 1
+  fi
+  _gc_cmd "gcloud scheduler jobs run $1 --location=${GCLOUD_REGION}"
+  gcloud scheduler jobs run "$1" --location="${GCLOUD_REGION}"
+}
+
+# ==============================================================================
+# QUICK UTILITIES
+# ==============================================================================
+
+# Open GCP console in browser
+gopen() {
+  local url="https://console.cloud.google.com/home/dashboard?project=${PROJECT}"
+  _gc_info "Opening: $url"
+  if command -v xdg-open &>/dev/null; then
+    xdg-open "$url"
+  elif command -v open &>/dev/null; then
+    open "$url"
+  else
+    echo "$url"
+  fi
+}
+
+# Get current quota usage
+gquota() {
+  _gc_cmd "gcloud compute project-info describe --format='table(quotas.metric,quotas.limit,quotas.usage)'"
+  gcloud compute project-info describe --format='table(quotas.metric,quotas.limit,quotas.usage)'
+}
+
+# List all enabled APIs
+gapis() {
+  _gc_cmd "gcloud services list --enabled"
+  gcloud services list --enabled
+}
+
+# Enable an API
+gapien() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: gapien <api-name>"
+    echo -e "Example: gapien cloudfunctions.googleapis.com"
+    return 1
+  fi
+  _gc_cmd "gcloud services enable $1"
+  gcloud services enable "$1"
+}
+
+# ==============================================================================
+# VERTEX AI
+# ==============================================================================
+
+# --- Models ---
+vaimodels() {
+  _gc_cmd "gcloud ai models list --region=${GCLOUD_REGION}"
+  gcloud ai models list --region="${GCLOUD_REGION}"
+}
+
+vaimodeldesc() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaimodeldesc <model-id>"
+    return 1
+  fi
+  _gc_cmd "gcloud ai models describe $1 --region=${GCLOUD_REGION}"
+  gcloud ai models describe "$1" --region="${GCLOUD_REGION}"
+}
+
+vaimodelrm() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaimodelrm <model-id>"
+    return 1
+  fi
+  if _gc_confirm "Delete model $1 ?"; then
+    _gc_cmd "gcloud ai models delete $1 --region=${GCLOUD_REGION}"
+    gcloud ai models delete "$1" --region="${GCLOUD_REGION}"
+  fi
+}
+
+vaimodelversions() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaimodelversions <model-id>"
+    return 1
+  fi
+  _gc_cmd "gcloud ai models list-version $1 --region=${GCLOUD_REGION}"
+  gcloud ai models list-version "$1" --region="${GCLOUD_REGION}"
+}
+
+# --- Endpoints ---
+vaiendpoints() {
+  _gc_cmd "gcloud ai endpoints list --region=${GCLOUD_REGION}"
+  gcloud ai endpoints list --region="${GCLOUD_REGION}"
+}
+
+vaiepdesc() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaiepdesc <endpoint-id>"
+    return 1
+  fi
+  _gc_cmd "gcloud ai endpoints describe $1 --region=${GCLOUD_REGION}"
+  gcloud ai endpoints describe "$1" --region="${GCLOUD_REGION}"
+}
+
+vaiepcreate() {
+  if [[ $# -lt 1 ]]; then
+    _gc_error "Usage: vaiepcreate <display-name> [description]"
+    return 1
+  fi
+  local desc="${2:-Endpoint created via CLI}"
+  _gc_cmd "gcloud ai endpoints create --display-name=\"$1\" --description=\"$desc\" --region=${GCLOUD_REGION}"
+  gcloud ai endpoints create --display-name="$1" --description="$desc" --region="${GCLOUD_REGION}"
+}
+
+vaieprm() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaieprm <endpoint-id>"
+    return 1
+  fi
+  if _gc_confirm "Delete endpoint $1 ?"; then
+    _gc_cmd "gcloud ai endpoints delete $1 --region=${GCLOUD_REGION}"
+    gcloud ai endpoints delete "$1" --region="${GCLOUD_REGION}"
+  fi
+}
+
+# Deploy model to endpoint
+vaideploy() {
+  if [[ $# -lt 2 ]]; then
+    _gc_error "Usage: vaideploy <endpoint-id> <model-id> [machine-type] [min-replicas]"
+    echo -e "Example: vaideploy 1234 5678 n1-standard-4 1"
+    return 1
+  fi
+  local endpoint="$1"
+  local model="$2"
+  local machine="${3:-n1-standard-4}"
+  local replicas="${4:-1}"
+  _gc_cmd "gcloud ai endpoints deploy-model $endpoint --model=$model --display-name=deployed-model --machine-type=$machine --min-replica-count=$replicas --region=${GCLOUD_REGION}"
+  gcloud ai endpoints deploy-model "$endpoint" \
+    --model="$model" \
+    --display-name="deployed-model" \
+    --machine-type="$machine" \
+    --min-replica-count="$replicas" \
+    --region="${GCLOUD_REGION}"
+}
+
+# Undeploy model from endpoint
+vaiundeploy() {
+  if [[ $# -lt 2 ]]; then
+    _gc_error "Usage: vaiundeploy <endpoint-id> <deployed-model-id>"
+    return 1
+  fi
+  if _gc_confirm "Undeploy model $2 from endpoint $1 ?"; then
+    _gc_cmd "gcloud ai endpoints undeploy-model $1 --deployed-model-id=$2 --region=${GCLOUD_REGION}"
+    gcloud ai endpoints undeploy-model "$1" --deployed-model-id="$2" --region="${GCLOUD_REGION}"
+  fi
+}
+
+# Online prediction
+vaipredict() {
+  if [[ $# -ne 2 ]]; then
+    _gc_error "Usage: vaipredict <endpoint-id> <json-file>"
+    echo -e "JSON format: {\"instances\": [...]}"
+    return 1
+  fi
+  if [[ ! -f "$2" ]]; then
+    _gc_error "File not found: $2"
+    return 1
+  fi
+  _gc_cmd "gcloud ai endpoints predict $1 --region=${GCLOUD_REGION} --json-request=$2"
+  gcloud ai endpoints predict "$1" --region="${GCLOUD_REGION}" --json-request="$2"
+}
+
+# Raw predict (for custom containers)
+vairawpredict() {
+  if [[ $# -ne 2 ]]; then
+    _gc_error "Usage: vairawpredict <endpoint-id> <json-file>"
+    return 1
+  fi
+  if [[ ! -f "$2" ]]; then
+    _gc_error "File not found: $2"
+    return 1
+  fi
+  _gc_cmd "gcloud ai endpoints raw-predict $1 --region=${GCLOUD_REGION} --json-request=$2"
+  gcloud ai endpoints raw-predict "$1" --region="${GCLOUD_REGION}" --json-request="$2"
+}
+
+# --- Custom Training Jobs ---
+vaijobs() {
+  _gc_cmd "gcloud ai custom-jobs list --region=${GCLOUD_REGION}"
+  gcloud ai custom-jobs list --region="${GCLOUD_REGION}"
+}
+
+vaijobdesc() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaijobdesc <job-id>"
+    return 1
+  fi
+  _gc_cmd "gcloud ai custom-jobs describe $1 --region=${GCLOUD_REGION}"
+  gcloud ai custom-jobs describe "$1" --region="${GCLOUD_REGION}"
+}
+
+vaijobcancel() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaijobcancel <job-id>"
+    return 1
+  fi
+  if _gc_confirm "Cancel job $1 ?"; then
+    _gc_cmd "gcloud ai custom-jobs cancel $1 --region=${GCLOUD_REGION}"
+    gcloud ai custom-jobs cancel "$1" --region="${GCLOUD_REGION}"
+  fi
+}
+
+vaijoblogs() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaijoblogs <job-id>"
+    return 1
+  fi
+  _gc_cmd "gcloud ai custom-jobs stream-logs $1 --region=${GCLOUD_REGION}"
+  gcloud ai custom-jobs stream-logs "$1" --region="${GCLOUD_REGION}"
+}
+
+# Create custom job from config
+vaijobcreate() {
+  if [[ $# -lt 2 ]]; then
+    _gc_error "Usage: vaijobcreate <display-name> <config.yaml>"
+    echo -e "See: https://cloud.google.com/vertex-ai/docs/training/create-custom-job"
+    return 1
+  fi
+  if [[ ! -f "$2" ]]; then
+    _gc_error "Config file not found: $2"
+    return 1
+  fi
+  _gc_cmd "gcloud ai custom-jobs create --display-name=\"$1\" --config=$2 --region=${GCLOUD_REGION}"
+  gcloud ai custom-jobs create --display-name="$1" --config="$2" --region="${GCLOUD_REGION}"
+}
+
+# Quick job with container
+vaijobrun() {
+  if [[ $# -lt 2 ]]; then
+    _gc_error "Usage: vaijobrun <display-name> <container-image> [machine-type] [args...]"
+    echo -e "Example: vaijobrun my-job gcr.io/my-project/trainer:v1 n1-standard-8 --epochs=10"
+    return 1
+  fi
+  local name="$1"
+  local image="$2"
+  local machine="${3:-n1-standard-4}"
+  shift 3
+  local args="$*"
+  
+  _gc_cmd "gcloud ai custom-jobs create --display-name=\"$name\" --worker-pool-spec=machine-type=$machine,replica-count=1,container-image-uri=$image --region=${GCLOUD_REGION}"
+  if [[ -n "$args" ]]; then
+    gcloud ai custom-jobs create \
+      --display-name="$name" \
+      --worker-pool-spec="machine-type=$machine,replica-count=1,container-image-uri=$image" \
+      --args="$args" \
+      --region="${GCLOUD_REGION}"
+  else
+    gcloud ai custom-jobs create \
+      --display-name="$name" \
+      --worker-pool-spec="machine-type=$machine,replica-count=1,container-image-uri=$image" \
+      --region="${GCLOUD_REGION}"
+  fi
+}
+
+# --- Hyperparameter Tuning Jobs ---
+vaihpjobs() {
+  _gc_cmd "gcloud ai hp-tuning-jobs list --region=${GCLOUD_REGION}"
+  gcloud ai hp-tuning-jobs list --region="${GCLOUD_REGION}"
+}
+
+vaihpjobdesc() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaihpjobdesc <job-id>"
+    return 1
+  fi
+  _gc_cmd "gcloud ai hp-tuning-jobs describe $1 --region=${GCLOUD_REGION}"
+  gcloud ai hp-tuning-jobs describe "$1" --region="${GCLOUD_REGION}"
+}
+
+vaihpjobcancel() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaihpjobcancel <job-id>"
+    return 1
+  fi
+  if _gc_confirm "Cancel HP tuning job $1 ?"; then
+    _gc_cmd "gcloud ai hp-tuning-jobs cancel $1 --region=${GCLOUD_REGION}"
+    gcloud ai hp-tuning-jobs cancel "$1" --region="${GCLOUD_REGION}"
+  fi
+}
+
+# --- Pipelines (via REST API - not in gcloud CLI) ---
+vaipipelines() {
+  local token response http_code
+  token=$(gcloud auth print-access-token 2>/dev/null)
+  if [[ -z "$token" ]]; then
+    _gc_error "Not authenticated. Run 'gcloud auth login' first."
+    return 1
+  fi
+  _gc_cmd "GET https://${GCLOUD_REGION}-aiplatform.googleapis.com/v1/projects/${PROJECT}/locations/${GCLOUD_REGION}/pipelineJobs"
+  
+  response=$(curl -s -w "\n%{http_code}" -H "Authorization: Bearer $token" \
+    "https://${GCLOUD_REGION}-aiplatform.googleapis.com/v1/projects/${PROJECT}/locations/${GCLOUD_REGION}/pipelineJobs")
+  
+  http_code=$(echo "$response" | tail -n1)
+  response=$(echo "$response" | sed '$d')
+  
+  if [[ "$http_code" -ne 200 ]]; then
+    _gc_error "API returned HTTP $http_code"
+    echo "$response" | jq . 2>/dev/null || echo "$response"
+    return 1
+  fi
+  
+  # Check if there are any pipeline jobs
+  local count
+  count=$(echo "$response" | jq -r '.pipelineJobs // [] | length')
+  
+  if [[ "$count" -eq 0 ]]; then
+    _gc_info "No pipeline jobs found in ${PROJECT} (${GCLOUD_REGION})"
+    return 0
+  fi
+  
+  echo -e "NAME\tDISPLAY_NAME\tSTATE\tCREATED"
+  echo "$response" | \
+    jq -r '.pipelineJobs[]? | [(.name | split("/") | last), .displayName, .state, .createTime[0:19]] | @tsv' | \
+    column -t -s $'\t'
+}
+
+vaipipedesc() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaipipedesc <pipeline-job-id>"
+    echo -e "Get IDs from: vaipipelines"
+    return 1
+  fi
+  local token
+  token=$(gcloud auth print-access-token 2>/dev/null)
+  if [[ -z "$token" ]]; then
+    _gc_error "Not authenticated. Run 'gcloud auth login' first."
+    return 1
+  fi
+  local job_path="$1"
+  # If just an ID is provided, construct full path
+  if [[ ! "$job_path" =~ ^projects/ ]]; then
+    job_path="projects/${PROJECT}/locations/${GCLOUD_REGION}/pipelineJobs/$1"
+  fi
+  _gc_cmd "GET https://${GCLOUD_REGION}-aiplatform.googleapis.com/v1/${job_path}"
+  curl -s -H "Authorization: Bearer $token" \
+    "https://${GCLOUD_REGION}-aiplatform.googleapis.com/v1/${job_path}" | jq .
+}
+
+vaipipecancel() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaipipecancel <pipeline-job-id>"
+    return 1
+  fi
+  local token
+  token=$(gcloud auth print-access-token 2>/dev/null)
+  if [[ -z "$token" ]]; then
+    _gc_error "Not authenticated. Run 'gcloud auth login' first."
+    return 1
+  fi
+  local job_path="$1"
+  if [[ ! "$job_path" =~ ^projects/ ]]; then
+    job_path="projects/${PROJECT}/locations/${GCLOUD_REGION}/pipelineJobs/$1"
+  fi
+  if _gc_confirm "Cancel pipeline $1 ?"; then
+    _gc_cmd "POST https://${GCLOUD_REGION}-aiplatform.googleapis.com/v1/${job_path}:cancel"
+    curl -s -X POST -H "Authorization: Bearer $token" \
+      "https://${GCLOUD_REGION}-aiplatform.googleapis.com/v1/${job_path}:cancel" | jq .
+  fi
+}
+
+# Delete a pipeline job
+vaipiperm() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaipiperm <pipeline-job-id>"
+    return 1
+  fi
+  local token
+  token=$(gcloud auth print-access-token 2>/dev/null)
+  if [[ -z "$token" ]]; then
+    _gc_error "Not authenticated. Run 'gcloud auth login' first."
+    return 1
+  fi
+  local job_path="$1"
+  if [[ ! "$job_path" =~ ^projects/ ]]; then
+    job_path="projects/${PROJECT}/locations/${GCLOUD_REGION}/pipelineJobs/$1"
+  fi
+  if _gc_confirm "Delete pipeline job $1 ?"; then
+    _gc_cmd "DELETE https://${GCLOUD_REGION}-aiplatform.googleapis.com/v1/${job_path}"
+    curl -s -X DELETE -H "Authorization: Bearer $token" \
+      "https://${GCLOUD_REGION}-aiplatform.googleapis.com/v1/${job_path}" | jq .
+  fi
+}
+
+# --- Datasets ---
+vaidatasets() {
+  _gc_cmd "gcloud ai datasets list --region=${GCLOUD_REGION}"
+  gcloud ai datasets list --region="${GCLOUD_REGION}"
+}
+
+vaidsdesc() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaidsdesc <dataset-id>"
+    return 1
+  fi
+  _gc_cmd "gcloud ai datasets describe $1 --region=${GCLOUD_REGION}"
+  gcloud ai datasets describe "$1" --region="${GCLOUD_REGION}"
+}
+
+vaidsrm() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaidsrm <dataset-id>"
+    return 1
+  fi
+  if _gc_confirm "Delete dataset $1 ?"; then
+    _gc_cmd "gcloud ai datasets delete $1 --region=${GCLOUD_REGION}"
+    gcloud ai datasets delete "$1" --region="${GCLOUD_REGION}"
+  fi
+}
+
+# --- Workbench (Notebooks) ---
+vainb() {
+  _gc_cmd "gcloud workbench instances list --location=${GCLOUD_REGION}"
+  gcloud workbench instances list --location="${GCLOUD_REGION}"
+}
+
+vainbdesc() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vainbdesc <instance-name>"
+    return 1
+  fi
+  _gc_cmd "gcloud workbench instances describe $1 --location=${GCLOUD_REGION}"
+  gcloud workbench instances describe "$1" --location="${GCLOUD_REGION}"
+}
+
+vainbstart() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vainbstart <instance-name>"
+    return 1
+  fi
+  _gc_cmd "gcloud workbench instances start $1 --location=${GCLOUD_REGION}"
+  gcloud workbench instances start "$1" --location="${GCLOUD_REGION}"
+}
+
+vainbstop() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vainbstop <instance-name>"
+    return 1
+  fi
+  if _gc_confirm "Stop notebook $1 ?"; then
+    _gc_cmd "gcloud workbench instances stop $1 --location=${GCLOUD_REGION}"
+    gcloud workbench instances stop "$1" --location="${GCLOUD_REGION}"
+  fi
+}
+
+vainbrm() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vainbrm <instance-name>"
+    return 1
+  fi
+  if _gc_confirm "Delete notebook instance $1 ?"; then
+    _gc_cmd "gcloud workbench instances delete $1 --location=${GCLOUD_REGION}"
+    gcloud workbench instances delete "$1" --location="${GCLOUD_REGION}"
+  fi
+}
+
+# Get notebook URL
+vainburl() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vainburl <instance-name>"
+    return 1
+  fi
+  _gc_cmd "gcloud workbench instances describe $1 --location=${GCLOUD_REGION} --format='value(proxyUri)'"
+  gcloud workbench instances describe "$1" --location="${GCLOUD_REGION}" --format='value(proxyUri)'
+}
+
+# --- Feature Store ---
+vaifs() {
+  _gc_cmd "gcloud ai feature-stores list --region=${GCLOUD_REGION}"
+  gcloud ai feature-stores list --region="${GCLOUD_REGION}" 2>/dev/null || \
+    _gc_warn "Feature Store v1. For Feature Store 2.0, use Feature Groups."
+}
+
+vaifsdesc() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaifsdesc <featurestore-id>"
+    return 1
+  fi
+  _gc_cmd "gcloud ai feature-stores describe $1 --region=${GCLOUD_REGION}"
+  gcloud ai feature-stores describe "$1" --region="${GCLOUD_REGION}"
+}
+
+# Feature Groups (Feature Store 2.0, requires beta)
+vaifg() {
+  local fs="${1:-}"
+  if [[ -z "$fs" ]]; then
+    _gc_cmd "gcloud beta ai feature-groups list --region=${GCLOUD_REGION}"
+    gcloud beta ai feature-groups list --region="${GCLOUD_REGION}"
+  else
+    _gc_cmd "gcloud beta ai feature-groups describe $fs --region=${GCLOUD_REGION}"
+    gcloud beta ai feature-groups describe "$fs" --region="${GCLOUD_REGION}"
+  fi
+}
+
+# Entity Types (legacy Feature Store)
+vaiet() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaiet <featurestore-id>"
+    return 1
+  fi
+  _gc_cmd "gcloud ai feature-stores entity-types list --featurestore=$1 --region=${GCLOUD_REGION}"
+  gcloud ai feature-stores entity-types list --featurestore="$1" --region="${GCLOUD_REGION}"
+}
+
+# --- Tensorboards ---
+vaitb() {
+  _gc_cmd "gcloud ai tensorboards list --region=${GCLOUD_REGION}"
+  gcloud ai tensorboards list --region="${GCLOUD_REGION}"
+}
+
+vaitbdesc() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaitbdesc <tensorboard-id>"
+    return 1
+  fi
+  _gc_cmd "gcloud ai tensorboards describe $1 --region=${GCLOUD_REGION}"
+  gcloud ai tensorboards describe "$1" --region="${GCLOUD_REGION}"
+}
+
+vaitbcreate() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaitbcreate <display-name>"
+    return 1
+  fi
+  _gc_cmd "gcloud ai tensorboards create --display-name=\"$1\" --region=${GCLOUD_REGION}"
+  gcloud ai tensorboards create --display-name="$1" --region="${GCLOUD_REGION}"
+}
+
+vaitbrm() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaitbrm <tensorboard-id>"
+    return 1
+  fi
+  if _gc_confirm "Delete tensorboard $1 ?"; then
+    _gc_cmd "gcloud ai tensorboards delete $1 --region=${GCLOUD_REGION}"
+    gcloud ai tensorboards delete "$1" --region="${GCLOUD_REGION}"
+  fi
+}
+
+# --- Index / Vector Search ---
+vaiidx() {
+  _gc_cmd "gcloud ai indexes list --region=${GCLOUD_REGION}"
+  gcloud ai indexes list --region="${GCLOUD_REGION}"
+}
+
+vaiidxdesc() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaiidxdesc <index-id>"
+    return 1
+  fi
+  _gc_cmd "gcloud ai indexes describe $1 --region=${GCLOUD_REGION}"
+  gcloud ai indexes describe "$1" --region="${GCLOUD_REGION}"
+}
+
+vaiidxep() {
+  _gc_cmd "gcloud ai index-endpoints list --region=${GCLOUD_REGION}"
+  gcloud ai index-endpoints list --region="${GCLOUD_REGION}"
+}
+
+vaiidxepdesc() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaiidxepdesc <index-endpoint-id>"
+    return 1
+  fi
+  _gc_cmd "gcloud ai index-endpoints describe $1 --region=${GCLOUD_REGION}"
+  gcloud ai index-endpoints describe "$1" --region="${GCLOUD_REGION}"
+}
+
+# --- Batch Predictions ---
+vaibatch() {
+  _gc_cmd "gcloud ai batch-prediction-jobs list --region=${GCLOUD_REGION}"
+  gcloud ai batch-prediction-jobs list --region="${GCLOUD_REGION}"
+}
+
+vaibatchdesc() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaibatchdesc <job-id>"
+    return 1
+  fi
+  _gc_cmd "gcloud ai batch-prediction-jobs describe $1 --region=${GCLOUD_REGION}"
+  gcloud ai batch-prediction-jobs describe "$1" --region="${GCLOUD_REGION}"
+}
+
+vaibatchcancel() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaibatchcancel <job-id>"
+    return 1
+  fi
+  if _gc_confirm "Cancel batch prediction job $1 ?"; then
+    _gc_cmd "gcloud ai batch-prediction-jobs cancel $1 --region=${GCLOUD_REGION}"
+    gcloud ai batch-prediction-jobs cancel "$1" --region="${GCLOUD_REGION}"
+  fi
+}
+
+# --- Model Evaluation ---
+vaieval() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaieval <model-id>"
+    return 1
+  fi
+  _gc_cmd "gcloud ai models evaluations list --model=$1 --region=${GCLOUD_REGION}"
+  gcloud ai models evaluations list --model="$1" --region="${GCLOUD_REGION}"
+}
+
+# --- Operations (async job tracking) ---
+vaiops() {
+  _gc_cmd "gcloud ai operations list --region=${GCLOUD_REGION}"
+  gcloud ai operations list --region="${GCLOUD_REGION}"
+}
+
+vaiopwait() {
+  if [[ $# -ne 1 ]]; then
+    _gc_error "Usage: vaiopwait <operation-id>"
+    return 1
+  fi
+  _gc_cmd "gcloud ai operations wait $1 --region=${GCLOUD_REGION}"
+  gcloud ai operations wait "$1" --region="${GCLOUD_REGION}"
+}
+
+# --- Quick Status Overview ---
+vaistatus() {
+  echo -e "\n${_GC_CYAN}=== Vertex AI Status (${GCLOUD_REGION}) ===${_GC_NC}\n"
+  
+  echo -e "${_GC_YELLOW}Models:${_GC_NC}"
+  gcloud ai models list --region="${GCLOUD_REGION}" --format="table(name.basename(),displayName,createTime.date())" 2>/dev/null | head -10
+  
+  echo -e "\n${_GC_YELLOW}Endpoints:${_GC_NC}"
+  gcloud ai endpoints list --region="${GCLOUD_REGION}" --format="table(name.basename(),displayName,deployedModels.len())" 2>/dev/null | head -10
+  
+  echo -e "\n${_GC_YELLOW}Running Jobs:${_GC_NC}"
+  gcloud ai custom-jobs list --region="${GCLOUD_REGION}" --filter="state=JOB_STATE_RUNNING" --format="table(name.basename(),displayName,state)" 2>/dev/null | head -10
+  
+  echo -e "\n${_GC_YELLOW}Notebooks:${_GC_NC}"
+  gcloud workbench instances list --location="${GCLOUD_REGION}" --format="table(name.basename(),state)" 2>/dev/null | head -10
+  
+  echo ""
+}
+
+# ==============================================================================
+# Print welcome message on source
+# ==============================================================================
+_gc_info "GCloud CLI helpers loaded. Type 'gchelp' for usage."
