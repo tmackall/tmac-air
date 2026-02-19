@@ -15,6 +15,8 @@ import json
 import os
 import re
 import sys
+import urllib.error
+import urllib.request
 from datetime import datetime
 
 from google.auth.transport.requests import Request
@@ -332,6 +334,138 @@ def label_and_archive_messages(service, messages, label_name, batch_size=100, ar
     return processed
 
 
+def get_list_unsubscribe(service, message_id):
+    """Extract List-Unsubscribe info from a message.
+
+    Returns dict with keys: http_url, mailto_url, use_post
+    """
+    try:
+        msg = service.users().messages().get(
+            userId='me',
+            id=message_id,
+            format='metadata',
+            metadataHeaders=['List-Unsubscribe', 'List-Unsubscribe-Post']
+        ).execute()
+        headers = {h['name'].lower(): h['value'] for h in msg.get('payload', {}).get('headers', [])}
+
+        raw = headers.get('list-unsubscribe', '')
+        if not raw:
+            return {'http_url': None, 'mailto_url': None, 'use_post': False}
+
+        http_url = None
+        mailto_url = None
+
+        for match in re.findall(r'<([^>]+)>', raw):
+            if match.startswith('http') and not http_url:
+                http_url = match
+            elif match.startswith('mailto:') and not mailto_url:
+                mailto_url = match
+
+        # Check for one-click POST support (RFC 8058)
+        post_header = headers.get('list-unsubscribe-post', '')
+        use_post = 'List-Unsubscribe=One-Click' in post_header
+
+        return {'http_url': http_url, 'mailto_url': mailto_url, 'use_post': use_post}
+    except HttpError:
+        return {'http_url': None, 'mailto_url': None, 'use_post': False}
+
+
+def unsubscribe_from_messages(service, messages, dry_run=False, no_confirm=False):
+    """Attempt to unsubscribe from senders via List-Unsubscribe headers."""
+    print(f"\nAnalyzing {len(messages)} messages for unsubscribe links...")
+
+    # Group by From address, collect one message ID per unique sender
+    seen_senders = {}
+    for msg in messages:
+        details = get_message_details(service, msg['id'])
+        sender = details['from']
+        if sender not in seen_senders:
+            seen_senders[sender] = msg['id']
+
+    print(f"  Found {len(seen_senders)} unique sender(s).")
+
+    # Fetch unsubscribe info for each unique sender
+    results = []
+    for sender, msg_id in seen_senders.items():
+        info = get_list_unsubscribe(service, msg_id)
+        info['sender'] = sender
+        info['has_unsubscribe'] = bool(info['http_url'] or info['mailto_url'])
+        results.append(info)
+
+    with_links = [r for r in results if r['has_unsubscribe']]
+    without_links = [r for r in results if not r['has_unsubscribe']]
+
+    if without_links:
+        print(f"\nNo unsubscribe link found for {len(without_links)} sender(s):")
+        for r in without_links:
+            print(f"  {r['sender']}")
+
+    if not with_links:
+        print("\nNo unsubscribe actions available.")
+        return 0
+
+    print(f"\nWill attempt to unsubscribe from {len(with_links)} sender(s):")
+    for r in with_links:
+        if r['http_url']:
+            method = "one-click POST" if r['use_post'] else "HTTP GET"
+        else:
+            method = "mailto (manual)"
+        print(f"  {r['sender']} [{method}]")
+
+    if dry_run:
+        print(f"\n[DRY RUN] Would attempt to unsubscribe from {len(with_links)} sender(s).")
+        return 0
+
+    if not no_confirm:
+        response = input(f"\nUnsubscribe from {len(with_links)} sender(s)? [y/N]: ")
+        if response.lower() != 'y':
+            print("Cancelled.")
+            return 0
+
+    succeeded = 0
+    mailto_only = []
+
+    for r in with_links:
+        if r['http_url']:
+            try:
+                if r['use_post']:
+                    req = urllib.request.Request(
+                        r['http_url'],
+                        data=b'List-Unsubscribe=One-Click',
+                        headers={
+                            'User-Agent': 'Mozilla/5.0',
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        method='POST'
+                    )
+                else:
+                    req = urllib.request.Request(
+                        r['http_url'],
+                        headers={'User-Agent': 'Mozilla/5.0'}
+                    )
+                urllib.request.urlopen(req, timeout=15)
+                print(f"  Unsubscribed: {r['sender']}")
+                succeeded += 1
+            except urllib.error.HTTPError as e:
+                # Many unsubscribe endpoints return non-2xx but still process the request
+                print(f"  Sent (HTTP {e.code}): {r['sender']}")
+                succeeded += 1
+            except Exception as e:
+                print(f"  Failed ({r['sender']}): {e}")
+                if r['mailto_url']:
+                    mailto_only.append(r)
+        else:
+            mailto_only.append(r)
+
+    if mailto_only:
+        print(f"\nManual unsubscribe needed for {len(mailto_only)} sender(s):")
+        for r in mailto_only:
+            print(f"  {r['sender']}: {r['mailto_url']}")
+
+    print(f"\nDone! Unsubscribed from {succeeded} sender(s) via HTTP.")
+    return succeeded
+
+
 def run_tidy_rules(service, dry_run=False, no_confirm=False, max_results=500):
     """Process all tidy rules from config file."""
     if not os.path.exists(TIDY_RULES_FILE):
@@ -583,6 +717,7 @@ Gmail search operators:
     parser.add_argument('--trash', '-t', action='store_true', help='Move messages to trash (recoverable)')
     parser.add_argument('--label', '-l', metavar='LABEL', help='Apply label and archive (remove from inbox)')
     parser.add_argument('--download', action='store_true', help='Download attachments from matching messages')
+    parser.add_argument('--unsubscribe', action='store_true', help='Unsubscribe from senders via List-Unsubscribe headers')
     parser.add_argument('--output', '-o', default='./gmail-downloads', help='Output directory for downloads (default: ./gmail-downloads)')
     parser.add_argument('--no-confirm', '-y', action='store_true', help='Skip confirmation prompt')
     parser.add_argument('--max', '-m', type=int, default=500, help='Maximum messages to process (default: 500)')
@@ -637,13 +772,13 @@ Gmail search operators:
         print("Error: --query is required (or use --tidy, --labels, --get-label)")
         sys.exit(1)
 
-    if not args.dry_run and not args.delete and not args.trash and not args.label and not args.download:
-        print("Error: Specify --dry-run, --delete, --trash, --label <name>, or --download")
+    if not args.dry_run and not args.delete and not args.trash and not args.label and not args.download and not args.unsubscribe:
+        print("Error: Specify --dry-run, --delete, --trash, --label <name>, --download, or --unsubscribe")
         sys.exit(1)
 
-    action_count = sum([args.delete, args.trash, bool(args.label), args.download])
+    action_count = sum([args.delete, args.trash, bool(args.label), args.download, args.unsubscribe])
     if action_count > 1:
-        print("Error: Cannot use multiple actions (--delete, --trash, --label, --download)")
+        print("Error: Cannot use multiple actions (--delete, --trash, --label, --download, --unsubscribe)")
         sys.exit(1)
     
     try:
@@ -656,6 +791,10 @@ Gmail search operators:
 
         if args.download:
             download_attachments(service, messages, args.output, args.dry_run)
+            sys.exit(0)
+
+        if args.unsubscribe:
+            unsubscribe_from_messages(service, messages, args.dry_run, args.no_confirm)
             sys.exit(0)
 
         preview_messages(service, messages, args.preview)

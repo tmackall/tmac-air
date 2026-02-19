@@ -40,6 +40,7 @@ ${YELLOW}Commands:${NC}
   ${BLUE}download${NC} <query>      Download attachments from matching emails
   ${BLUE}labels${NC}                List all Gmail labels
   ${BLUE}get-label${NC} <label>     View messages under a label
+  ${BLUE}unsubscribe${NC}           Unsubscribe from all promotion senders (via List-Unsubscribe)
   ${BLUE}unread${NC} [age]          Clean old unread emails (default: 1y)
   ${BLUE}search${NC} <query>        Run custom Gmail search query
   ${BLUE}help${NC}                  Show this help message
@@ -141,6 +142,13 @@ run_tidy() {
     local dry_run_flag=""
     [[ "$ACTION" == "--dry-run" ]] && dry_run_flag="--dry-run"
     python3 "$PYTHON_SCRIPT" --tidy $dry_run_flag "${EXTRA_OPTS[@]}"
+}
+
+run_unsubscribe() {
+    local query="$1"
+    local dry_run_flag=""
+    [[ "$ACTION" == "--dry-run" ]] && dry_run_flag="--dry-run"
+    python3 "$PYTHON_SCRIPT" --query "$query" --unsubscribe $dry_run_flag "${EXTRA_OPTS[@]}"
 }
 
 run_download() {
@@ -256,6 +264,10 @@ case "$COMMAND" in
             exit 1
         fi
         run_get_label "$1"
+        ;;
+    unsubscribe)
+        QUERY="category:promotions"
+        run_unsubscribe "$QUERY"
         ;;
     unread)
         AGE="${1:-1y}"
