@@ -325,4 +325,6 @@ _claude_conv_completions() {
 }
 
 complete -F _claude_conv_completions claude-conv
-eval "$(pyenv init -)"
+if command -v pyenv &>/dev/null; then
+    eval "$(pyenv init -)"
+fi
