@@ -177,15 +177,15 @@ set -- "${REMAINING_ARGS[@]}"
 case "$COMMAND" in
     promotions)
         AGE="${1:-6m}"
-        run_query "category:promotions older_than:$AGE"
+        run_query "in:inbox category:promotions older_than:$AGE"
         ;;
     social)
         AGE="${1:-6m}"
-        run_query "category:social older_than:$AGE"
+        run_query "in:inbox category:social older_than:$AGE"
         ;;
     updates)
         AGE="${1:-6m}"
-        run_query "category:updates older_than:$AGE"
+        run_query "in:inbox category:updates older_than:$AGE"
         ;;
     large)
         SIZE="${1:-5M}"
