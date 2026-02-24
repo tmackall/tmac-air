@@ -13,6 +13,9 @@ BASE_NAME=""
 EXCLUDE_PATTERNS=()
 SOURCE_DIR=""
 
+# Always exclude these patterns
+DEFAULT_EXCLUDES=(".git" "node_modules")
+
 # Function to display usage
 usage() {
     cat << EOF
@@ -42,6 +45,7 @@ Notes:
     - Patterns can match files or directories
     - The script automatically handles the current directory (.) correctly
     - Source directory can be specified before or after options
+    - .git and node_modules directories are always excluded by default
 
 The script will create a uniquely named zip file with a timestamp:
     <basename>_YYYYMMDD_HHMMSS.zip
@@ -112,6 +116,11 @@ fi
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 ZIP_FILE="${BASE_NAME}_${TIMESTAMP}.zip"
 
+# Add default excludes to the patterns
+for pattern in "${DEFAULT_EXCLUDES[@]}"; do
+    EXCLUDE_PATTERNS+=("$pattern")
+done
+
 # Build exclude arguments for zip command
 # macOS zip needs various pattern formats for comprehensive exclusion
 EXCLUDE_ARGS=()
@@ -133,7 +142,7 @@ done
 # Create the zip file
 echo "Creating zip file: $ZIP_FILE"
 echo "Source directory: $SOURCE_DIR"
-if [[ ${#EXCLUDE_PATTERNS[@]:-0} -gt 0 ]]; then
+if [[ ${#EXCLUDE_PATTERNS[@]} -gt 0 ]]; then
     echo "Excluding patterns: ${EXCLUDE_PATTERNS[*]}"
 fi
 

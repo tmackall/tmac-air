@@ -328,3 +328,4 @@ complete -F _claude_conv_completions claude-conv
 if command -v pyenv &>/dev/null; then
     eval "$(pyenv init -)"
 fi
+alias zipc='zipc.sh'
