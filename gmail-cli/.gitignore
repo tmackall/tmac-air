@@ -1,0 +1,10 @@
+# OAuth credentials and tokens
+credentials.json
+token.json
+
+# Client ID file
+gmail-client-id
+
+# Log files
+log
+*.log

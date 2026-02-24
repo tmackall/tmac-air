@@ -1,0 +1,14 @@
+# ============================================
+# Variable overrides
+# ============================================
+# This file automatically loads when you run terraform
+# Override defaults here for your environment
+
+environment = "staging"
+app_name    = "dashboard"
+
+config_options = {
+  debug_mode = true
+  log_level  = "debug"
+  port       = 3000
+}

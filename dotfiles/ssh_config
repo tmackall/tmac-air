@@ -10,17 +10,19 @@ Host *
     ServerAliveCountMax 3
 
 # Local network hosts - update IPs as needed
-Host bexley-l
-    HostName 192.168.86.25
+Host bexley.l
+    #HostName 192.168.86.25
+    HostName mackall-bexley.local
     User tmackall
-Host bexley-l2
-    HostName 192.168.86.50
+Host bexley.l2
+    #HostName 192.168.86.50
+    HostName mackall-bexley2.local
     User tmackall
 Host homey
     HostName 192.168.86.150
     User tmackall
-Host niwot-l
-    HostName 192.168.86.249
+Host niwot.l
+    HostName mackall-niwot.local
     User tmackall
 Host niwot
     HostName lacey.malamack.us
@@ -28,6 +30,16 @@ Host niwot
 Host nas
     HostName 192.168.1.200
     User admin
+Host streambox
+    HostName bexley-streambox.local
+    User tmackall
+Host sb
+    HostName bexley-streambox.local
+    User tmackall
+Host tmac-air
+    HostName 192.168.86.57
+    User tmackall
+    ProxyJump streambox
 
 # GitHub
 Host github.com

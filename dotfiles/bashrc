@@ -10,6 +10,10 @@ shopt -s dirspell        # Autocorrect typos in directory names
 shopt -s globstar        # Enable ** for recursive globbing
 shopt -s nocaseglob      # Case-insensitive globbing
 
+# Blinking underline cursor with bright green color
+echo -ne '\e[3 q'
+echo -ne '\e]12;#00FF00\a'
+
 ###################
 # History
 ###################
@@ -26,8 +30,18 @@ parse_git_branch() {
     git branch 2>/dev/null | sed -n 's/^\* \(.*\)/ (\1)/p'
 }
 
-# Colorful prompt with git branch
-export PS1='\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[33m\]$(parse_git_branch)\[\033[00m\]\$ '
+# Dynamic prompt color based on terminal background
+_set_prompt() {
+  local bg="${COLORFGBG##*;}"
+  local color
+  if [[ "$bg" -gt 8 ]] 2>/dev/null; then
+    color="\[\033[0;34m\]"  # dark blue for light backgrounds
+  else
+    color="\[\033[01;32m\]" # bold green for dark backgrounds
+  fi
+  PS1="${color}\u@\h:\w$(parse_git_branch)\[\033[00m\]\$ "
+}
+PROMPT_COMMAND="_set_prompt"
 
 ###################
 # Environment
@@ -253,10 +267,14 @@ function fenc() {
 }
 export -f fenc
 alias sbrc="source $HOME/.bashrc"
+alias zipc='zipc.sh'
 
 for f in ~/dotfiles/bash_functions.d/*.sh; do
     source "$f"
 done
+function cleanScreenshots(){
+    \rm -f ~/Screenshots/scr-*.png ~/Screenshots/rec-*.mov 2>/dev/null
+}
 # Claude Conversation Converter
 # Add this to your ~/.bashrc or ~/.bash_profile
 #
@@ -328,4 +346,7 @@ complete -F _claude_conv_completions claude-conv
 if command -v pyenv &>/dev/null; then
     eval "$(pyenv init -)"
 fi
-alias zipc='zipc.sh'
+export PATH="$HOME/.local/bin:$PATH"
+
+# Startup message
+echo "dotfiles loaded — $(date '+%a %b %d %H:%M') | bash ${BASH_VERSION%%(*} | $(uname -n)"

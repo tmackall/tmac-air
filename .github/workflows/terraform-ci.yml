@@ -1,0 +1,73 @@
+# ============================================
+# Terraform CI Workflow
+# ============================================
+# Validates Terraform files in learn-terraform/
+# Runs on push/PR when those files change
+# ============================================
+
+name: Terraform CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "learn-terraform/**"
+      - ".github/workflows/terraform-ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "learn-terraform/**"
+  # Allow manual trigger
+  workflow_dispatch:
+
+env:
+  TF_VERSION: "1.5.7"
+
+jobs:
+  validate:
+    name: Validate Terraform
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        directory:
+          - learn-terraform
+          - learn-terraform/gcp
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      # Check formatting
+      - name: Terraform Format
+        id: fmt
+        run: terraform fmt -check
+        working-directory: ${{ matrix.directory }}
+        continue-on-error: true
+
+      # Initialize
+      - name: Terraform Init
+        id: init
+        run: terraform init -backend=false
+        working-directory: ${{ matrix.directory }}
+
+      # Validate
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate
+        working-directory: ${{ matrix.directory }}
+
+      # Summary
+      - name: Results
+        run: |
+          echo "## ${{ matrix.directory }}" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Format | ${{ steps.fmt.outcome == 'success' && '✅' || '⚠️' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Init | ${{ steps.init.outcome == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Validate | ${{ steps.validate.outcome == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
