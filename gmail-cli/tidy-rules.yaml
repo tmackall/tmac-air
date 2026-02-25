@@ -146,3 +146,60 @@ rules:
 - label: Taxes
   from:
   - irs.gov
+- label: Ruth
+  from:
+  - malamack@gmail.com
+  - li
+  archive: true
+- label: Printer
+  from:
+  - brother.com
+  archive: true
+- label: house-indiana, Handyman DIY
+  from:
+  - b3powerwash@gmail.com
+  archive: false
+- label: Google, Security
+  from:
+  - accounts.google.com
+  archive: true
+- label: healthcare
+  from:
+  - benefits.unitedhea
+  archive: true
+- label: house-indiana/bills, billls
+  from:
+  - account.xfinity.com
+  archive: true
+- label: house-indiana/bills, utilities
+  from:
+  - westlafayette.in.gov
+  archive: true
+- label: bills,home-niwot,house-indiana
+  from:
+  - account.netflix.com
+  archive: true
+- label: auto, insurance
+  from:
+  - e.progressi
+  archive: true
+- label: bills, tech
+  from:
+  - email.claude.com
+  archive: true
+- label: house-indiana, automation, Google
+  from:
+  - nest.com
+  archive: true
+- label: pharmacy, health
+  from:
+  - alerts.cvs.com
+  archive: true
+- label: medical, opto
+  from:
+  - mypatientvisit.com
+  archive: true
+- label: taxes, Purdue/Sports
+  from:
+  - ticketmaster.com
+  archive: true
