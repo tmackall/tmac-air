@@ -14,6 +14,9 @@ Host bexley.l
     #HostName 192.168.86.25
     HostName mackall-bexley.local
     User tmackall
+Host bl
+    HostName mackall-bexley.local
+    User tmackall
 Host bexley.l2
     #HostName 192.168.86.50
     HostName mackall-bexley2.local
@@ -34,7 +37,7 @@ Host streambox
     HostName bexley-streambox.local
     User tmackall
 Host sb
-    HostName bexley-streambox.local
+   HostName bexley-streambox.local
     User tmackall
 Host tmac-air
     HostName 192.168.86.57

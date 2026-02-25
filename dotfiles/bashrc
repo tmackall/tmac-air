@@ -112,6 +112,36 @@ alias gco='git checkout'
 alias gb='git branch'
 alias glog='git log --oneline --graph --decorate -20'
 
+# Git update: stash changes, switch to main, pull latest
+gup() {
+    if ! git rev-parse --git-dir &>/dev/null; then
+        echo "Not a git repository"
+        return 1
+    fi
+
+    local branch
+    branch=$(git rev-parse --abbrev-ref HEAD)
+
+    # Stash if there are uncommitted changes
+    local stashed=0
+    if ! git diff --quiet || ! git diff --cached --quiet; then
+        echo "Stashing uncommitted changes..."
+        git stash push -m "gup auto-stash $(date '+%Y-%m-%d %H:%M:%S')"
+        stashed=1
+    fi
+
+    # Switch to main if not already there
+    if [ "$branch" != "main" ]; then
+        echo "Switching from '$branch' to 'main'..."
+        git checkout main || { echo "Failed to switch to main"; return 1; }
+    fi
+
+    echo "Pulling latest..."
+    git pull
+
+    [ "$stashed" -eq 1 ] && echo "Note: your changes are saved in the stash (git stash pop to restore)"
+}
+
 ###################
 # Aliases - Docker
 ###################
@@ -347,6 +377,17 @@ if command -v pyenv &>/dev/null; then
     eval "$(pyenv init -)"
 fi
 export PATH="$HOME/.local/bin:$PATH"
+
+wgd(){
+    cmd="sudo wg-quick down wg0
+    echo "$cmd"
+    eval "$cmd"
+}
+wgu(){
+    cmd="sudo wg-quick up wg0
+    echo "$cmd"
+    eval "$cmd"
+}
 
 # Startup message
 echo "dotfiles loaded — $(date '+%a %b %d %H:%M') | bash ${BASH_VERSION%%(*} | $(uname -n)"

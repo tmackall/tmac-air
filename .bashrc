@@ -1,1 +1,1 @@
-/home/tmackall/dotfiles/bashrc
+/Users/tmackall/dotfiles/bashrc

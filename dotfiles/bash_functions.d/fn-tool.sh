@@ -1,1 +1,1 @@
-/home/tmackall/dotfiles/fn-tool.sh
+/Users/tmackall/dotfiles/fn-tool.sh

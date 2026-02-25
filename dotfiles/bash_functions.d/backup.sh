@@ -1,1 +1,1 @@
-/home/tmackall/dotfiles/backup.sh
+/Users/tmackall/dotfiles/backup.sh
