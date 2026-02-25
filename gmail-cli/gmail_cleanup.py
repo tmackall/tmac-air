@@ -583,6 +583,29 @@ def is_covered_by_rules(from_header, domain, rules):
     return False
 
 
+# Generic email providers where different senders should not be grouped together
+PERSONAL_DOMAINS = {
+    'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com',
+    'me.com', 'mac.com', 'aol.com', 'live.com', 'msn.com', 'protonmail.com',
+    'proton.me', 'ymail.com', 'sbcglobal.net', 'att.net', 'comcast.net',
+    'verizon.net',
+}
+
+
+def extract_email(from_header):
+    """Extract the bare email address from a From header."""
+    match = re.search(r'<([^>]+)>', from_header)
+    return (match.group(1) if match else from_header.strip()).lower()
+
+
+def group_key(from_header):
+    """Return the key to group a sender by: full email for personal domains, domain otherwise."""
+    domain = extract_domain(from_header)
+    if domain in PERSONAL_DOMAINS:
+        return extract_email(from_header)
+    return domain
+
+
 def suggest_tidy_labels(service, rules, dry_run=False):
     """Scan remaining inbox emails and interactively suggest labels for uncovered senders."""
     print(f"\n{'='*60}")
@@ -596,7 +619,7 @@ def suggest_tidy_labels(service, rules, dry_run=False):
 
     print(f"\nAnalyzing {len(messages)} inbox email(s)...")
 
-    domain_groups = {}  # domain -> list of detail dicts (with 'msg_id')
+    domain_groups = {}  # group key -> list of detail dicts (with 'msg_id')
     for msg in messages:
         details = get_message_details(service, msg['id'])
         details['msg_id'] = msg['id']
@@ -605,7 +628,8 @@ def suggest_tidy_labels(service, rules, dry_run=False):
             continue
         if is_covered_by_rules(details['from'], domain, rules):
             continue
-        domain_groups.setdefault(domain, []).append(details)
+        key = group_key(details['from'])
+        domain_groups.setdefault(key, []).append(details)
 
     if not domain_groups:
         print("\nAll inbox emails are already covered by existing rules!")
@@ -618,11 +642,11 @@ def suggest_tidy_labels(service, rules, dry_run=False):
 
     added_rules = []
 
-    for domain, msgs in sorted_groups:
-        suggested_label = domain_to_label(domain)
+    for key, msgs in sorted_groups:
+        suggested_label = domain_to_label(key.split('@')[-1] if '@' in key else key)
         count = len(msgs)
 
-        print(f"--- {domain} ({count} email{'s' if count > 1 else ''}) ---")
+        print(f"--- {key} ({count} email{'s' if count > 1 else ''}) ---")
         for m in msgs[:3]:
             print(f"  From:    {m['from'][:60]}")
             print(f"  Subject: {m['subject'][:60]}")
@@ -656,11 +680,11 @@ def suggest_tidy_labels(service, rules, dry_run=False):
         label_and_archive_messages(service, msg_objs, label, archive=archive)
 
         add_rule_response = input(
-            f"  Add '{domain}' as a rule in tidy-rules.json? [y/N]: "
+            f"  Add '{key}' as a rule in tidy-rules.yaml? [y/N]: "
         ).strip()
         if add_rule_response.lower() == 'y':
-            added_rules.append({'label': label, 'from': [domain], 'archive': archive})
-            print(f"  Rule queued: label='{label}', from=['{domain}']\n")
+            added_rules.append({'label': label, 'from': [key], 'archive': archive})
+            print(f"  Rule queued: label='{label}', from=['{key}']\n")
         else:
             print()
 
