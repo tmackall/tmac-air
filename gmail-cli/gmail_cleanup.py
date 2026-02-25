@@ -11,7 +11,7 @@ Usage:
 
 import argparse
 import base64
-import json
+import yaml
 import os
 import re
 import sys
@@ -30,7 +30,7 @@ SCOPES = ['https://mail.google.com/']
 
 CREDENTIALS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'credentials.json')
 TOKEN_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'token.json')
-TIDY_RULES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tidy-rules.json')
+TIDY_RULES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tidy-rules.yaml')
 
 
 def get_gmail_service():
@@ -474,7 +474,7 @@ def run_tidy_rules(service, dry_run=False, no_confirm=False, max_results=500):
         return
 
     with open(TIDY_RULES_FILE, 'r') as f:
-        config = json.load(f)
+        config = yaml.safe_load(f)
 
     rules = config.get('rules', [])
     if not rules:
@@ -536,6 +536,157 @@ def run_tidy_rules(service, dry_run=False, no_confirm=False, max_results=500):
     print(f"\n{'='*60}")
     print(f"Tidy complete! Processed {total_processed} messages total.")
     print('='*60)
+
+    if not no_confirm:
+        suggest = input("\nScan for inbox emails without a filing rule? [y/N]: ").strip()
+        if suggest.lower() == 'y':
+            suggest_tidy_labels(service, rules, dry_run=dry_run)
+
+
+def extract_domain(from_header):
+    """Extract the sender domain from a From header like 'Name <email@domain.com>'."""
+    match = re.search(r'<([^>]+)>', from_header)
+    email = match.group(1) if match else from_header.strip()
+    if '@' in email:
+        return email.split('@')[1].lower().strip('>')
+    return None
+
+
+def domain_to_label(domain):
+    """Convert a sender domain like 'mail.amazon.com' to a readable label like 'Amazon'."""
+    prefixes = [
+        'mail.', 'email.', 'notifications.', 'notification.', 'alerts.', 'alert.',
+        'noreply.', 'no-reply.', 'info.', 'news.', 'newsletter.', 'hello.', 'hi.',
+        'support.', 'service.', 'updates.', 'update.', 'notify.', 'mailer.',
+        'messages.', 'message.', 'reply.', 'do-not-reply.',
+    ]
+    cleaned = domain
+    for prefix in prefixes:
+        if cleaned.startswith(prefix):
+            cleaned = cleaned[len(prefix):]
+            break
+    # Take the first segment before the TLD(s)
+    parts = cleaned.split('.')
+    name = parts[0] if parts else cleaned
+    return name.capitalize()
+
+
+def is_covered_by_rules(from_header, domain, rules):
+    """Return True if this sender already matches any tidy rule."""
+    from_lower = from_header.lower()
+    domain_lower = domain.lower()
+    for rule in rules:
+        for pattern in rule.get('from', []):
+            p = pattern.lower()
+            if p in from_lower or p in domain_lower:
+                return True
+    return False
+
+
+def suggest_tidy_labels(service, rules, dry_run=False):
+    """Scan remaining inbox emails and interactively suggest labels for uncovered senders."""
+    print(f"\n{'='*60}")
+    print("Scanning inbox for emails without a filing rule...")
+    print('='*60)
+
+    messages = search_messages(service, 'in:inbox', max_results=150)
+    if not messages:
+        print("Inbox is empty — nothing to suggest.")
+        return
+
+    print(f"\nAnalyzing {len(messages)} inbox email(s)...")
+
+    domain_groups = {}  # domain -> list of detail dicts (with 'msg_id')
+    for msg in messages:
+        details = get_message_details(service, msg['id'])
+        details['msg_id'] = msg['id']
+        domain = extract_domain(details['from'])
+        if not domain:
+            continue
+        if is_covered_by_rules(details['from'], domain, rules):
+            continue
+        domain_groups.setdefault(domain, []).append(details)
+
+    if not domain_groups:
+        print("\nAll inbox emails are already covered by existing rules!")
+        return
+
+    sorted_groups = sorted(domain_groups.items(), key=lambda x: len(x[1]), reverse=True)
+    multi_count = sum(1 for _, msgs in sorted_groups if len(msgs) >= 2)
+    print(f"\nFound {len(domain_groups)} sender(s) with no filing rule "
+          f"({multi_count} with multiple emails).\n")
+
+    added_rules = []
+
+    for domain, msgs in sorted_groups:
+        suggested_label = domain_to_label(domain)
+        count = len(msgs)
+
+        print(f"--- {domain} ({count} email{'s' if count > 1 else ''}) ---")
+        for m in msgs[:3]:
+            print(f"  From:    {m['from'][:60]}")
+            print(f"  Subject: {m['subject'][:60]}")
+            print(f"  Date:    {m['date'][:25]}")
+            if count > 1:
+                print()
+        if count > 3:
+            print(f"  ... and {count - 3} more")
+
+        if dry_run:
+            print(f"  [DRY RUN] Suggested label: '{suggested_label}'\n")
+            continue
+
+        print(f"\n  Suggested label: {suggested_label}")
+        response = input(
+            "  Apply? [y=yes, n=skip, <label>=custom label, q=quit suggestions]: "
+        ).strip()
+
+        if response.lower() == 'q':
+            break
+        if response.lower() in ('n', ''):
+            print()
+            continue
+
+        label = suggested_label if response.lower() == 'y' else response
+
+        archive_response = input("  Archive (remove from inbox)? [Y/n]: ").strip()
+        archive = archive_response.lower() != 'n'
+
+        msg_objs = [{'id': m['msg_id']} for m in msgs]
+        label_and_archive_messages(service, msg_objs, label, archive=archive)
+
+        add_rule_response = input(
+            f"  Add '{domain}' as a rule in tidy-rules.json? [y/N]: "
+        ).strip()
+        if add_rule_response.lower() == 'y':
+            added_rules.append({'label': label, 'from': [domain], 'archive': archive})
+            print(f"  Rule queued: label='{label}', from=['{domain}']\n")
+        else:
+            print()
+
+    if added_rules:
+        with open(TIDY_RULES_FILE, 'r') as f:
+            config = yaml.safe_load(f)
+
+        for new_rule in added_rules:
+            label = new_rule['label']
+            domain = new_rule['from'][0]
+            # Merge into an existing rule for the same label if possible
+            merged = False
+            for rule in config['rules']:
+                if rule['label'].lower() == label.lower() and 'from' in rule:
+                    if domain not in rule['from']:
+                        rule['from'].append(domain)
+                    merged = True
+                    print(f"  Added '{domain}' to existing '{label}' rule.")
+                    break
+            if not merged:
+                config['rules'].append(new_rule)
+                print(f"  Created new rule: label='{label}', from=['{domain}']")
+
+        with open(TIDY_RULES_FILE, 'w') as f:
+            yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        print(f"\nSaved {len(added_rules)} rule(s) to tidy-rules.json.")
 
 
 def sanitize_filename(filename):
