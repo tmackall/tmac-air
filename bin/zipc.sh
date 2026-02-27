@@ -16,6 +16,12 @@ SOURCE_DIR=""
 # Always exclude these patterns
 DEFAULT_EXCLUDES=(".git" "node_modules")
 
+# Always exclude these file patterns (binary/build artifacts)
+DEFAULT_FILE_EXCLUDES=("*.class" "*.jar" "*.war" "*.ear" "*.o" "*.so" "*.dylib" "*.a" "*.dll" "*.exe" "*.pyc" "*.pyo" "*.zip" "*.tar" "*.gz" "*.bz2" "*.xz" "*.rar" "*.7z")
+
+# Always exclude these Java project directories
+DEFAULT_DIR_EXCLUDES=("target" "build" ".gradle" ".idea" ".settings" "bin" "out")
+
 # Function to display usage
 usage() {
     cat << EOF
@@ -45,7 +51,9 @@ Notes:
     - Patterns can match files or directories
     - The script automatically handles the current directory (.) correctly
     - Source directory can be specified before or after options
-    - .git and node_modules directories are always excluded by default
+    - Always excluded dirs: .git, node_modules, target, build, .gradle, .idea, .settings, bin, out
+    - Always excluded files: *.class, *.jar, *.war, *.ear, *.o, *.so, *.dylib, *.a, *.dll, *.exe,
+      *.pyc, *.pyo, *.zip, *.tar, *.gz, *.bz2, *.xz, *.rar, *.7z
 
 The script will create a uniquely named zip file with a timestamp:
     <basename>_YYYYMMDD_HHMMSS.zip
@@ -118,6 +126,12 @@ ZIP_FILE="${BASE_NAME}_${TIMESTAMP}.zip"
 
 # Add default excludes to the patterns
 for pattern in "${DEFAULT_EXCLUDES[@]}"; do
+    EXCLUDE_PATTERNS+=("$pattern")
+done
+for pattern in "${DEFAULT_DIR_EXCLUDES[@]}"; do
+    EXCLUDE_PATTERNS+=("$pattern")
+done
+for pattern in "${DEFAULT_FILE_EXCLUDES[@]}"; do
     EXCLUDE_PATTERNS+=("$pattern")
 done
 
