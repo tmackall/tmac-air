@@ -13,12 +13,15 @@
 set -e
 
 DOTFILES_DIR="$(cd "$(dirname "$0")" && pwd)"
+# Relative path from $HOME to dotfiles dir (e.g. "dotfiles")
+DOTFILES_REL="${DOTFILES_DIR#"$HOME/"}"
 BACKUP_DIR="$HOME/.dotfiles_backup/$(date +%Y%m%d_%H%M%S)"
 
 # Files to skip (not dotfiles)
 SKIP_FILES="install.sh README.md LICENSE .gitignore .git"
 
-# Special mappings (source -> destination)
+# Special mappings: source -> relative-from-dest-dir/source
+# ssh_config lives one level deeper (~/.ssh/config), so prefix with ../
 declare -A SPECIAL=(
     ["ssh_config"]="$HOME/.ssh/config"
 )
@@ -33,52 +36,60 @@ mkdir -p "$BACKUP_DIR"
 mkdir -p "$HOME/.ssh"
 chmod 700 "$HOME/.ssh"
 
-# Function to link a file
+# Function to link a file/directory using a relative symlink
 link_file() {
-    local source="$1"
+    local rel_source="$1"
     local dest="$2"
-    
+
     # Backup existing file if it exists and isn't a symlink
-    if [ -f "$dest" ] && [ ! -L "$dest" ]; then
+    if [ -e "$dest" ] && [ ! -L "$dest" ]; then
         echo "↗ Backing up existing $dest"
-        cp "$dest" "$BACKUP_DIR/"
+        cp -r "$dest" "$BACKUP_DIR/"
     fi
-    
+
     # Remove existing file or symlink
     if [ -e "$dest" ] || [ -L "$dest" ]; then
-        rm "$dest"
+        rm -f "$dest"
     fi
-    
-    # Create symlink
-    ln -s "$source" "$dest"
-    echo "✓ Linked $(basename "$source") -> $dest"
+
+    # Create relative symlink
+    ln -s "$rel_source" "$dest"
+    echo "✓ Linked $rel_source -> $dest"
 }
 
 # Process all files in dotfiles directory
 for file in "$DOTFILES_DIR"/*; do
     [ -f "$file" ] || continue  # Skip if not a file
-    
+
     name=$(basename "$file")
-    
+
     # Skip non-dotfiles
     if [[ " $SKIP_FILES " == *" $name "* ]]; then
         continue
     fi
-    
+
     # Skip hidden files
     if [[ "$name" == .* ]]; then
         continue
     fi
-    
+
     # Check for special mapping
     if [[ -v "SPECIAL[$name]" ]]; then
         dest="${SPECIAL[$name]}"
+        # Special destinations are one dir deeper, so need ../
+        link_file "../$DOTFILES_REL/$name" "$dest"
     else
-        # Default: link as dotfile in home directory
         dest="$HOME/.$name"
+        link_file "$DOTFILES_REL/$name" "$dest"
     fi
-    
-    link_file "$file" "$dest"
+done
+
+# Link subdirectories (e.g. bash_functions.d)
+for dir in "$DOTFILES_DIR"/*/; do
+    [ -d "$dir" ] || continue
+    name=$(basename "$dir")
+    [[ "$name" == .* ]] && continue
+    link_file "$DOTFILES_REL/$name" "$HOME/.$name"
 done
 
 # Set permissions on ssh config
