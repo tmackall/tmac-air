@@ -11,8 +11,10 @@ shopt -s globstar        # Enable ** for recursive globbing
 shopt -s nocaseglob      # Case-insensitive globbing
 
 # Blinking underline cursor with bright green color
-echo -ne '\e[3 q'
-echo -ne '\e]12;#00FF00\a'
+if [[ $- == *i* ]]; then
+    echo -ne '\e[3 q'
+    echo -ne '\e]12;#00FF00\a'
+fi
 
 ###################
 # History
@@ -153,6 +155,13 @@ alias di='docker images'
 alias dlog='docker logs -f'
 alias dexec='docker exec -it'
 alias dclean='docker system prune -af'
+
+###################
+# Aliases - WireGuard
+###################
+alias wg-status='wg-client.sh status'
+alias wg-up='wg-client.sh up'
+alias wg-down='wg-client.sh down'
 
 ###################
 # Aliases - Network Hosts
@@ -379,15 +388,22 @@ fi
 export PATH="$HOME/.local/bin:$PATH"
 
 wgd(){
-    cmd="sudo wg-quick down wg0
+    cmd="sudo wg-quick down wg0"
     echo "$cmd"
     eval "$cmd"
 }
 wgu(){
-    cmd="sudo wg-quick up wg0
+    cmd="sudo wg-quick up wg0"
     echo "$cmd"
     eval "$cmd"
 }
 
-# Startup message
-echo "dotfiles loaded — $(date '+%a %b %d %H:%M') | bash ${BASH_VERSION%%(*} | $(uname -n)"
+# Startup message (only for interactive sessions — output breaks scp/rsync)
+if [[ $- == *i* ]]; then
+    echo "dotfiles loaded — $(date '+%a %b %d %H:%M') | bash ${BASH_VERSION%%(*} | $(uname -n)"
+    if ip link show wg0 &>/dev/null; then
+        echo -e "WireGuard: \033[0;32mUP\033[0m (wg0)"
+    else
+        echo -e "WireGuard: \033[0;31mDOWN\033[0m (wg0)"
+    fi
+fi

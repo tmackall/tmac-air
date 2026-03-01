@@ -1,1 +1,1 @@
-/Users/tmackall/dotfiles/bash_functions.d
+/home/tmackall/dotfiles/bash_functions.d

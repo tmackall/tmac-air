@@ -1,1 +1,0 @@
-/Users/tmackall/dotfiles/install.sh
