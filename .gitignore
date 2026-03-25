@@ -75,7 +75,4 @@ dashboards/
 /gcloudrc-enhanced
 /tags.csv
 /Profiles.json
-/resume/paystubs.pdf
-/resume/resignation_letter.docx
-/resume/*.docx
-/resume/*.pdf
+/resume/
