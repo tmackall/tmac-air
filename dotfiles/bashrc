@@ -11,7 +11,7 @@ shopt -s globstar        # Enable ** for recursive globbing
 shopt -s nocaseglob      # Case-insensitive globbing
 
 # Blinking underline cursor with bright green color
-if [[ $- == *i* ]]; then
+if [[ $- == *i* && -t 1 ]]; then
     echo -ne '\e[3 q'
     echo -ne '\e]12;#00FF00\a'
 fi
@@ -169,6 +169,8 @@ alias wg-down='wg-client.sh down'
 # Add your local network hosts here
 # alias pi='ssh pi@192.168.1.50'
 # alias nas='ssh admin@192.168.1.100'
+alias inn='ssh tmackall@bexley-streambox'   # Indiana
+alias co='ssh tmackall@mackall-niwot'       # Colorado
 
 ###################
 # Aliases - GCP/Work
@@ -398,12 +400,21 @@ wgu(){
     eval "$cmd"
 }
 
-# Startup message (only for interactive sessions — output breaks scp/rsync)
-if [[ $- == *i* ]]; then
+# Startup message (only for interactive terminal sessions — output breaks scp/rsync/pipes)
+if [[ $- == *i* && -t 1 ]]; then
     echo "dotfiles loaded — $(date '+%a %b %d %H:%M') | bash ${BASH_VERSION%%(*} | $(uname -n)"
     if ip link show wg0 &>/dev/null; then
         echo -e "WireGuard: \033[0;32mUP\033[0m (wg0)"
     else
         echo -e "WireGuard: \033[0;31mDOWN\033[0m (wg0)"
+    fi
+    if command -v tailscale &>/dev/null; then
+        local ts_ip
+        ts_ip=$(tailscale ip 2>/dev/null | head -1)
+        if [[ -n "$ts_ip" ]]; then
+            echo -e "Tailscale: \033[0;32mRunning\033[0m ($ts_ip)"
+        else
+            echo -e "Tailscale: \033[0;31mDOWN\033[0m"
+        fi
     fi
 fi
