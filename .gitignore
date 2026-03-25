@@ -60,3 +60,22 @@ yy
 private/
 dashboards/
 .terraform.d/
+
+# Personal and sensitive documents
+/personal/
+/ukg/
+/tekssystems/
+/.cups/
+/taxes/
+/*.jpg
+/*.jpeg
+/*.docx
+/*.pages
+/PS-749220.txt
+/gcloudrc-enhanced
+/tags.csv
+/Profiles.json
+/resume/paystubs.pdf
+/resume/resignation_letter.docx
+/resume/*.docx
+/resume/*.pdf

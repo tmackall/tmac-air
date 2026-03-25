@@ -105,7 +105,7 @@ def get_message_details(service, message_id):
         return {
             'id': message_id,
             'subject': headers.get('Subject', '(no subject)')[:60],
-            'from': headers.get('From', '(unknown)')[:40],
+            'from': headers.get('From', '(unknown)'),
             'date': headers.get('Date', '(unknown date)')[:25]
         }
     except HttpError:
@@ -119,7 +119,7 @@ def preview_messages(service, messages, limit=10):
     
     for msg in messages[:limit]:
         details = get_message_details(service, msg['id'])
-        print(f"From: {details['from']}")
+        print(f"From: {details['from'][:60]}")
         print(f"Subject: {details['subject']}")
         print(f"Date: {details['date']}")
         print("-" * 100)
@@ -296,17 +296,32 @@ def get_messages_by_label(service, label_name, max_results=500):
 
 
 def label_and_archive_messages(service, messages, label_name, batch_size=100, archive=True):
-    """Apply label and optionally remove from inbox (archive) in batches."""
+    """Apply one or more labels and optionally remove from inbox (archive) in batches.
+
+    label_name may be a string (single label or comma-separated) or a list of label names.
+    """
     total = len(messages)
     processed = 0
 
-    label_id = get_or_create_label(service, label_name)
-    if not label_id:
-        print("Error: Could not get or create label")
-        return 0
+    if isinstance(label_name, str):
+        label_names, err = parse_label_names(label_name)
+        if err:
+            print(f"Error: {err}")
+            return 0
+    else:
+        label_names = [l.strip() for l in label_name if l.strip()]
 
+    label_ids = []
+    for name in label_names:
+        lid = get_or_create_label(service, name)
+        if not lid:
+            print(f"Error: Could not get or create label '{name}'")
+            return 0
+        label_ids.append(lid)
+
+    label_display = ', '.join(f"'{n}'" for n in label_names)
     action = "and archiving" if archive else "(keeping in inbox)"
-    print(f"\nLabeling {total} messages with '{label_name}' {action}...")
+    print(f"\nLabeling {total} messages with {label_display} {action}...")
 
     for i in range(0, total, batch_size):
         batch = messages[i:i + batch_size]
@@ -314,7 +329,7 @@ def label_and_archive_messages(service, messages, label_name, batch_size=100, ar
 
         body = {
             'ids': message_ids,
-            'addLabelIds': [label_id],
+            'addLabelIds': label_ids,
         }
         if archive:
             body['removeLabelIds'] = ['INBOX']
@@ -520,7 +535,11 @@ def run_tidy_rules(service, dry_run=False, no_confirm=False, max_results=500):
             continue
 
         if not no_confirm:
-            response = input(f"\n{action_desc.capitalize()} {len(messages)} messages as '{label}'? [y/N]: ")
+            response = input(f"\n{action_desc.capitalize()} {len(messages)} messages as '{label}'? [y/N/d=delete]: ")
+            if response.lower() == 'd':
+                trash_messages(service, messages)
+                total_processed += len(messages)
+                continue
             if response.lower() != 'y':
                 print("Skipped.")
                 continue
@@ -530,7 +549,7 @@ def run_tidy_rules(service, dry_run=False, no_confirm=False, max_results=500):
                 if move_response.lower() == 'y':
                     archive = True
 
-        count = label_and_archive_messages(service, messages, label, archive=archive)
+        count = label_and_archive_messages(service, messages, [label], archive=archive)
         total_processed += count
 
     print(f"\n{'='*60}")
@@ -538,9 +557,33 @@ def run_tidy_rules(service, dry_run=False, no_confirm=False, max_results=500):
     print('='*60)
 
     if not no_confirm:
-        suggest = input("\nScan for inbox emails without a filing rule? [y/N]: ").strip()
-        if suggest.lower() == 'y':
+        suggest = input("\nScan for inbox emails without a filing rule? [Y/n]: ").strip()
+        if suggest.lower() != 'n':
             suggest_tidy_labels(service, rules, dry_run=dry_run)
+
+
+def parse_label_names(text):
+    """Parse a comma-separated label string into a list of label names.
+
+    Quoted labels (single or double quotes) may contain spaces.
+    Unquoted labels with spaces are rejected.
+
+    Returns (list_of_labels, error_message). On success error_message is None.
+    """
+    import re
+    labels = []
+    for token in re.split(r',(?=(?:[^"\']*["\'][^"\']*["\'])*[^"\']*$)', text):
+        token = token.strip()
+        if not token:
+            continue
+        if (token.startswith('"') and token.endswith('"')) or \
+                (token.startswith("'") and token.endswith("'")):
+            labels.append(token[1:-1])
+        elif ' ' in token:
+            return None, f"Label '{token}' contains a space — use quotes, e.g. \"{token}\""
+        else:
+            labels.append(token)
+    return labels, None
 
 
 def extract_domain(from_header):
@@ -571,7 +614,7 @@ def domain_to_label(domain):
     return name.capitalize()
 
 
-def is_covered_by_rules(from_header, domain, rules):
+def is_covered_by_rules(from_header, domain, rules, debug=False):
     """Return True if this sender already matches any tidy rule."""
     from_lower = from_header.lower()
     domain_lower = domain.lower()
@@ -579,6 +622,8 @@ def is_covered_by_rules(from_header, domain, rules):
         for pattern in rule.get('from', []):
             p = pattern.lower()
             if p in from_lower or p in domain_lower:
+                if debug:
+                    print(f"  [skip] '{from_header}' matched rule '{rule.get('label')}' via pattern '{pattern}'")
                 return True
     return False
 
@@ -612,6 +657,18 @@ def suggest_tidy_labels(service, rules, dry_run=False):
     print("Scanning inbox for emails without a filing rule...")
     print('='*60)
 
+    # Fetch existing labels once for the 'l' option
+    try:
+        label_results = service.users().labels().list(userId='me').execute()
+        existing_labels = sorted(
+            [l['name'] for l in label_results.get('labels', [])
+             if not l['name'].startswith('CATEGORY_') and l['name'] not in
+             ('INBOX', 'SENT', 'TRASH', 'SPAM', 'DRAFT', 'STARRED', 'IMPORTANT', 'UNREAD', 'CHAT')],
+            key=str.lower
+        )
+    except Exception:
+        existing_labels = []
+
     messages = search_messages(service, 'in:inbox', max_results=150)
     if not messages:
         print("Inbox is empty — nothing to suggest.")
@@ -625,8 +682,9 @@ def suggest_tidy_labels(service, rules, dry_run=False):
         details['msg_id'] = msg['id']
         domain = extract_domain(details['from'])
         if not domain:
+            print(f"  [skip] no domain found in from: '{details['from']}'")
             continue
-        if is_covered_by_rules(details['from'], domain, rules):
+        if is_covered_by_rules(details['from'], domain, rules, debug=True):
             continue
         key = group_key(details['from'])
         domain_groups.setdefault(key, []).append(details)
@@ -661,14 +719,44 @@ def suggest_tidy_labels(service, rules, dry_run=False):
             continue
 
         print(f"\n  Suggested label: {suggested_label}")
-        response = input(
-            "  Apply? [y=yes, n=skip, <label>=custom label, q=quit suggestions]: "
-        ).strip()
+        while True:
+            response = input(
+                "  Apply? [y=yes, n=skip, a=archive, d=trash/delete, l=list labels, <label>=custom label, q=quit suggestions]: "
+            ).strip()
+            if response.lower() == 'l':
+                if existing_labels:
+                    print("\n  Current labels:")
+                    for lname in existing_labels:
+                        print(f"    {lname}")
+                    print()
+                else:
+                    print("  (no labels found)\n")
+            elif response.lower() not in ('y', 'n', '', 'a', 'd', 'q'):
+                # Custom label — validate before accepting
+                _, err = parse_label_names(response)
+                if err:
+                    print(f"  Error: {err}\n")
+                else:
+                    break
+            else:
+                break
 
         if response.lower() == 'q':
             break
         if response.lower() in ('n', ''):
             print()
+            continue
+
+        if response.lower() == 'a':
+            service.users().messages().batchModify(
+                userId='me',
+                body={'ids': [m['msg_id'] for m in msgs], 'removeLabelIds': ['INBOX']}
+            ).execute()
+            print(f"  Archived {count} email{'s' if count > 1 else ''}.\n")
+            continue
+
+        if response.lower() == 'd':
+            trash_messages(service, [{'id': m['msg_id']} for m in msgs])
             continue
 
         label = suggested_label if response.lower() == 'y' else response
@@ -856,6 +944,175 @@ def download_attachments(service, messages, output_dir, dry_run=False):
     return downloaded
 
 
+def rename_label(service, old_name, new_name, dry_run=False):
+    """Rename a Gmail label."""
+    try:
+        results = service.users().labels().list(userId='me').execute()
+        all_labels = results.get('labels', [])
+    except HttpError as e:
+        print(f"Error listing labels: {e}")
+        return
+
+    label = next((l for l in all_labels if l['name'].lower() == old_name.lower()), None)
+    if not label:
+        # Try substring match and suggest candidates
+        matches = [l for l in all_labels if old_name.lower() in l['name'].lower()]
+        print(f"Error: Label '{old_name}' not found.")
+        if matches:
+            print("Did you mean one of these?")
+            for m in matches:
+                print(f"  {m['name']}")
+        else:
+            print("Use 'gmail labels' to see available labels.")
+        return
+
+    # Check if the target label already exists
+    target = next((l for l in all_labels if l['name'].lower() == new_name.lower()), None)
+
+    if target:
+        print(f"'{new_name}' already exists — will merge '{label['name']}' into it.")
+        if dry_run:
+            print("[DRY RUN] No changes made.")
+            return
+        confirm = input(f"Merge '{label['name']}' into '{target['name']}' and delete '{label['name']}'? [y/N]: ").strip()
+        if confirm.lower() != 'y':
+            print("Cancelled.")
+            return
+        # Re-label all messages
+        try:
+            msg_results = service.users().messages().list(userId='me', labelIds=[label['id']], maxResults=500).execute()
+            messages = msg_results.get('messages', [])
+            page_token = msg_results.get('nextPageToken')
+            while page_token:
+                msg_results = service.users().messages().list(userId='me', labelIds=[label['id']], maxResults=500, pageToken=page_token).execute()
+                messages.extend(msg_results.get('messages', []))
+                page_token = msg_results.get('nextPageToken')
+        except HttpError as e:
+            print(f"Error fetching messages: {e}")
+            return
+
+        if messages:
+            for i in range(0, len(messages), 100):
+                batch = messages[i:i + 100]
+                service.users().messages().batchModify(
+                    userId='me',
+                    body={'ids': [m['id'] for m in batch], 'addLabelIds': [target['id']], 'removeLabelIds': [label['id']]}
+                ).execute()
+            print(f"Moved {len(messages)} message(s) to '{target['name']}'.")
+        else:
+            print("No messages to move.")
+
+        service.users().labels().delete(userId='me', id=label['id']).execute()
+        print(f"Deleted '{label['name']}'.")
+    else:
+        print(f"Renaming '{label['name']}' → '{new_name}'")
+        if dry_run:
+            print("[DRY RUN] No changes made.")
+            return
+        try:
+            service.users().labels().patch(
+                userId='me', id=label['id'], body={'name': new_name}
+            ).execute()
+            print("Done.")
+        except HttpError as e:
+            print(f"Error renaming label: {e}")
+
+
+def fix_comma_labels(service, dry_run=False):
+    """Find labels with commas in their names and interactively split them into multiple labels."""
+    try:
+        results = service.users().labels().list(userId='me').execute()
+        all_labels = results.get('labels', [])
+    except HttpError as e:
+        print(f"Error listing labels: {e}")
+        return
+
+    comma_labels = [l for l in all_labels if ',' in l['name']]
+
+    if not comma_labels:
+        print("No labels with commas found.")
+        return
+
+    print(f"\nFound {len(comma_labels)} label(s) with commas:\n")
+    for l in comma_labels:
+        print(f"  {l['name']}")
+
+    print()
+
+    for label in comma_labels:
+        old_name = label['name']
+        old_id = label['id']
+        parts = [p.strip() for p in old_name.split(',') if p.strip()]
+
+        print(f"\n{'='*60}")
+        print(f"Label: {old_name}")
+        print(f"  Would split into: {parts}")
+
+        response = input("  Split this label? [y=yes, n=skip, <labels>=custom comma-separated, q=quit]: ").strip()
+
+        if response.lower() == 'q':
+            break
+        if response.lower() in ('n', ''):
+            continue
+
+        if response.lower() != 'y':
+            new_parts, err = parse_label_names(response)
+            if err:
+                print(f"  Error: {err} — skipping.")
+                continue
+            parts = new_parts
+
+        print(f"  New labels: {parts}")
+
+        # Fetch all messages with the old label
+        try:
+            msg_results = service.users().messages().list(
+                userId='me', labelIds=[old_id], maxResults=500
+            ).execute()
+            messages = msg_results.get('messages', [])
+            page_token = msg_results.get('nextPageToken')
+            while page_token:
+                msg_results = service.users().messages().list(
+                    userId='me', labelIds=[old_id], maxResults=500, pageToken=page_token
+                ).execute()
+                messages.extend(msg_results.get('messages', []))
+                page_token = msg_results.get('nextPageToken')
+        except HttpError as e:
+            print(f"  Error fetching messages: {e}")
+            continue
+
+        print(f"  {len(messages)} message(s) use this label.")
+
+        if dry_run:
+            print(f"  [DRY RUN] Would apply {parts} and delete '{old_name}'.")
+            continue
+
+        confirm = input(f"  Apply new labels and delete '{old_name}'? [y/N]: ").strip()
+        if confirm.lower() != 'y':
+            print("  Skipped.")
+            continue
+
+        # Apply new labels to all messages
+        if messages:
+            new_ids = [get_or_create_label(service, p) for p in parts]
+            new_ids = [lid for lid in new_ids if lid]
+            if new_ids:
+                for i in range(0, len(messages), 100):
+                    batch = messages[i:i + 100]
+                    service.users().messages().batchModify(
+                        userId='me',
+                        body={'ids': [m['id'] for m in batch], 'addLabelIds': new_ids, 'removeLabelIds': [old_id]}
+                    ).execute()
+                print(f"  Re-labeled {len(messages)} message(s).")
+
+        # Delete the old label
+        try:
+            service.users().labels().delete(userId='me', id=old_id).execute()
+            print(f"  Deleted label '{old_name}'.")
+        except HttpError as e:
+            print(f"  Error deleting label '{old_name}': {e}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='Filter and delete Gmail messages from the command line.',
@@ -885,6 +1142,8 @@ Gmail search operators:
     
     parser.add_argument('--query', '-q', help='Gmail search query')
     parser.add_argument('--tidy', action='store_true', help='Run all tidy rules from tidy-rules.json')
+    parser.add_argument('--fix-labels', action='store_true', help='Find labels with commas and split them into multiple labels')
+    parser.add_argument('--rename-label', nargs=2, metavar=('OLD', 'NEW'), help='Rename a label')
     parser.add_argument('--labels', action='store_true', help='List all Gmail labels')
     parser.add_argument('--get-label', metavar='LABEL', help='View messages under a label')
     parser.add_argument('--dry-run', '-n', action='store_true', help='Preview only, no deletion')
@@ -905,6 +1164,30 @@ Gmail search operators:
         try:
             service = get_gmail_service()
             run_tidy_rules(service, args.dry_run, args.no_confirm, args.max)
+        except HttpError as e:
+            print(f"Gmail API error: {e}")
+            sys.exit(1)
+        except KeyboardInterrupt:
+            print("\nCancelled.")
+            sys.exit(1)
+        sys.exit(0)
+
+    if args.rename_label:
+        try:
+            service = get_gmail_service()
+            rename_label(service, args.rename_label[0], args.rename_label[1], args.dry_run)
+        except HttpError as e:
+            print(f"Gmail API error: {e}")
+            sys.exit(1)
+        except KeyboardInterrupt:
+            print("\nCancelled.")
+            sys.exit(1)
+        sys.exit(0)
+
+    if args.fix_labels:
+        try:
+            service = get_gmail_service()
+            fix_comma_labels(service, args.dry_run)
         except HttpError as e:
             print(f"Gmail API error: {e}")
             sys.exit(1)

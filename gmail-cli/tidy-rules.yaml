@@ -42,6 +42,7 @@ rules:
   - firstfederalbanking.com
   - outrig
   - godaddy.com
+  - team.doxo.com
 - label: Legal
   from:
   - FJGG
@@ -149,7 +150,7 @@ rules:
 - label: Ruth
   from:
   - malamack@gmail.com
-  - li
+  - lilly.com
   archive: true
 - label: Printer
   from:
@@ -203,3 +204,48 @@ rules:
   from:
   - ticketmaster.com
   archive: true
+- label: Myjobhelper
+  from:
+  - alerts.myjobhelper.com
+  archive: true
+- label: '"jpb search"'
+  from:
+  - mercor.com
+  archive: true
+- label: Google/Maps
+  from:
+  - '@google.com'
+  archive: true
+- label: purdue
+  from:
+  - deliver.purdue
+  archive: true
+- label: Amazon
+  from:
+  - amazon.com
+  archive: true
+- label: Retailmenot
+  from:
+  - mail.retailmenot.com
+  archive: true
+- label: Temuemail
+  from:
+  - news.temuemail.com
+  archive: true
+- label: Renewhome
+  from:
+  - renewhome.com
+  archive: true
+- label: '"taxes 2025"'
+  from:
+  - longandassoc.ccsend.com
+  - longandassoc.com
+  archive: false
+- label: United
+  from:
+  - united.com
+  archive: false
+- label: Myhealthrecord
+  from:
+  - myhealthrecord.com
+  archive: false
