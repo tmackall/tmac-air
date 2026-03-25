@@ -409,7 +409,6 @@ if [[ $- == *i* && -t 1 ]]; then
         echo -e "WireGuard: \033[0;31mDOWN\033[0m (wg0)"
     fi
     if command -v tailscale &>/dev/null; then
-        local ts_ip
         ts_ip=$(tailscale ip 2>/dev/null | head -1)
         if [[ -n "$ts_ip" ]]; then
             echo -e "Tailscale: \033[0;32mRunning\033[0m ($ts_ip)"
